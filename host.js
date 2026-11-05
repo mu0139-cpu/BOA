@@ -53,7 +53,7 @@ function clockText(s) {
 }
 
 let drawQueued = false;
-function queueDraw() { if (!drawQueued) { drawQueued = true; requestAnimationFrame(draw); } }
+function queueDraw() { if (!drawQueued) { drawQueued = true; setTimeout(draw, 16); } }
 function draw() {
   drawQueued = false;
   const s = D.state;
