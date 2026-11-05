@@ -1,6 +1,6 @@
 import {
   CONFIGURED, ROOM, rref, onValue, set, get, update, now, GAMES, TEAM, HANDS,
-  moleSchedule, MOLE_POINTS, TAP_CAP_PER_SEC, REACT_PENALTY, esc, setupWarning, HAND_ICON, moleSvg
+  moleSchedule, MOLE_POINTS, TAP_CAP_PER_SEC, REACT_PENALTY, esc, setupWarning, HAND_ICON, moleSvg, moleLegend
 } from "./common.js";
 
 const app = document.getElementById("app");
@@ -132,7 +132,7 @@ function lobby() {
 
 function intro(s) {
   const g = GAMES[s.game];
-  shell(`<p class="muted">곧 시작</p><p class="big" style="font-size:40px">${esc(g.name)}</p><p class="title" style="font-size:20px;line-height:1.6">${esc(g.rule)}</p>`);
+  shell(`<p class="muted">곧 시작</p><p class="big" style="font-size:40px">${esc(g.name)}</p><p class="title" style="font-size:20px;line-height:1.6">${esc(g.rule)}</p>${s.game === "mole" ? moleLegend(82, 15) : ""}`);
 }
 
 // 공통: 카운트다운 문구
@@ -252,7 +252,7 @@ function reactGame(s) {
       if (cd) { msg.textContent = cd; pad.style.background = "var(--panel)"; }
       else if (t < s.goAt) { msg.textContent = "기다리세요…"; pad.style.background = "#4A4458"; pad.style.color = "var(--text)"; }
       else if (t < s.endAt) {
-        if (!shownAt) { pad.style.background = "var(--gold)"; pad.style.color = "#1C1029"; msg.textContent = "지금!"; shownAt = performance.now(); }
+        if (!shownAt) { pad.style.background = "var(--gold)"; pad.style.color = "#1C1029"; msg.textContent = "눌러!"; msg.style.fontSize = "80px"; shownAt = performance.now(); }
       } else finish(REACT_PENALTY, "시간 초과");
     }
     raf = requestAnimationFrame(loop);

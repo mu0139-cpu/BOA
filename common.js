@@ -88,6 +88,11 @@ export function moleSvg(kind) {
   const crown = kind === "gold" ? `<path d="M33 26 L39 9 L50 20 L61 9 L67 26 Z" fill="#F7D774" stroke="#B88A2E" stroke-width="2" stroke-linejoin="round"/>` : "";
   return `<svg viewBox="0 0 100 100" aria-hidden="true"><ellipse cx="50" cy="93" rx="46" ry="9" fill="#3B2A1E"/><path d="M14 93 Q12 26 50 22 Q88 26 86 93 Z" fill="${fur}"/><ellipse cx="50" cy="76" rx="22" ry="17" fill="${belly}"/><circle cx="37" cy="48" r="5" fill="#1C1029"/><circle cx="63" cy="48" r="5" fill="#1C1029"/><circle cx="38.6" cy="46.4" r="1.7" fill="#fff"/><circle cx="64.6" cy="46.4" r="1.7" fill="#fff"/><circle cx="27" cy="61" r="5" fill="#F29BAA" opacity=".55"/><circle cx="73" cy="61" r="5" fill="#F29BAA" opacity=".55"/><ellipse cx="50" cy="59" rx="9" ry="6.5" fill="#F29BAA"/><rect x="46" y="65" width="8" height="8" rx="1.5" fill="#fff"/>${crown}</svg>`;
 }
+// ---- 두더지잡기 규칙 그림 설명 ----
+export function moleLegend(size = 90, font = 18) {
+  const item = (k, label, pts, color) => `<div style="display:flex;flex-direction:column;align-items:center;gap:8px"><div style="width:${size}px;height:${size}px;box-sizing:border-box;border-radius:18px;background:var(--panel);border:2px solid ${color};display:flex;align-items:flex-end;justify-content:center;padding:4px">${moleSvg(k).replace("<svg ", '<svg style="width:92%;height:92%" ')}</div><span style="font-size:${font}px;font-weight:700">${label}</span><span style="font-size:${font + 6}px;font-weight:900;color:${color}">${pts}</span></div>`;
+  return `<div style="display:flex;gap:${Math.round(size / 4)}px;justify-content:center;margin-top:8px">${item("mole", "두더지", "+1점", "var(--good)")}${item("gold", "황금 두더지", "+5점", "var(--gold)")}${item("bomb", "폭탄", "-3점", "var(--bad)")}</div>`;
+}
 export const beats = (a, b) =>
   (a === "rock" && b === "scissors") || (a === "scissors" && b === "paper") || (a === "paper" && b === "rock");
 

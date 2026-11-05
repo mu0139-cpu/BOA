@@ -1,6 +1,6 @@
 import {
   CONFIGURED, ROOM, rref, onValue, set, update, remove, now,
-  GAMES, GAME_ORDER, TEAM, HANDS, HAND_ICON, beats, rankEntries, REACT_ROUNDS, REACT_PENALTY, esc, setupWarning
+  GAMES, GAME_ORDER, TEAM, HANDS, HAND_ICON, moleLegend, beats, rankEntries, REACT_ROUNDS, REACT_PENALTY, esc, setupWarning
 } from "./common.js";
 
 const $ = (q) => document.querySelector(q);
@@ -246,6 +246,7 @@ function introView(s) {
         <p class="muted" style="margin-bottom:8px">문제 목록 (한 줄에 하나: 질문 | 보기A | 보기B)</p>
         <textarea id="qs">${esc(D.minority?.text || DEFAULT_QUESTIONS)}</textarea></div>` : ""}
       ${s.game === "rps" ? `<p class="muted" style="font-size:22px">4명 이상일 땐 비겨도 생존, 3명 이하부터는 이긴 사람만 생존</p>` : ""}
+      ${s.game === "mole" ? moleLegend(150, 26) : ""}
     </div>`;
   setControls("모두의 폰에 규칙이 표시되고 있어요", [
     { label: "로비로", cls: "ghost", on: () => setState({ phase: "lobby" }) },
