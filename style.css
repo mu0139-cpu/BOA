@@ -1,0 +1,40 @@
+@import url("https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@600;700&family=Noto+Sans+KR:wght@400;500;700;900&display=swap");
+
+:root {
+  --bg: #1C1029;
+  --panel: #2A1A3D;
+  --panel-2: #36234D;
+  --line: rgba(217, 184, 114, 0.35);
+  --gold: #D9B872;
+  --gold-soft: #F0D9A4;
+  --purple: #8B5CC9;
+  --text: #F4EEFA;
+  --muted: #C7B9D9;
+  --bad: #F07A7A;
+  --good: #7CD6A4;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; }
+body {
+  background: var(--bg); color: var(--text);
+  font-family: "Noto Sans KR", system-ui, sans-serif;
+  -webkit-tap-highlight-color: transparent;
+}
+h1, h2, h3, p { margin: 0; }
+button { font: inherit; color: inherit; cursor: pointer; border: 0; }
+input { font: inherit; }
+.serif { font-family: "Cormorant Garamond", serif; letter-spacing: .08em; }
+.gold { color: var(--gold); }
+.muted { color: var(--muted); }
+.card { background: var(--panel); border: 1px solid var(--line); border-radius: 16px; padding: 24px; }
+.btn {
+  background: var(--gold); color: #1C1029; font-weight: 700;
+  border-radius: 12px; padding: 14px 22px; min-height: 48px;
+}
+.btn:disabled { opacity: .4; cursor: default; }
+.btn.ghost { background: transparent; color: var(--gold); border: 1.5px solid var(--gold); }
+.btn.purple { background: var(--purple); color: #fff; }
+.btn.danger { background: transparent; color: var(--bad); border: 1.5px solid var(--bad); }
+.team-purple { color: #B99AE8; }
+.team-gold { color: var(--gold); }
+.dot { display: inline-block; width: 12px; height: 12px; border-radius: 50%; vertical-align: middle; }
