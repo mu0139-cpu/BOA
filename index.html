@@ -24,14 +24,18 @@
   .tap-btn:active { transform: scale(.96); }
   .grid9 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; width: min(92vw, 420px); }
   .hole { aspect-ratio: 1; border-radius: 18px; background: var(--panel); border: 1.5px solid var(--line); font-size: 18px; font-weight: 900; touch-action: none; transition: background .05s; }
-  .hole.mole { background: #8A5A3C; color: #fff; }
-  .hole.gold { background: var(--gold); color: #1C1029; }
-  .hole.bomb { background: #3A3A3A; color: var(--bad); border-color: var(--bad); }
+  .hole { padding: 4px; display: flex; align-items: flex-end; justify-content: center; overflow: hidden; }
+  .hole svg { width: 92%; height: 92%; pointer-events: none; animation: pop .12s ease-out; }
+  @keyframes pop { from { transform: translateY(45%); } to { transform: none; } }
+  .hole.gold { border-color: var(--gold); box-shadow: 0 0 18px rgba(217,184,114,.6); }
+  .hole.bomb { border-color: var(--bad); }
   .hole.hit { outline: 3px solid #fff; }
   .react-pad { flex: 1; width: 100%; border-radius: 20px; display: flex; flex-direction: column; justify-content: center; align-items: center; gap: 10px; font-size: 32px; font-weight: 900; touch-action: none; }
   .choice-row { display: grid; gap: 12px; width: 100%; max-width: 420px; }
   .choice { padding: 26px 12px; border-radius: 16px; font-size: 24px; font-weight: 700; background: var(--panel); border: 2px solid var(--line); }
   .choice.on { border-color: var(--gold); background: rgba(217,184,114,.25); }
+  .choice.hand { display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 18px 6px; font-size: 18px; }
+  .hand-ic { font-size: 48px; line-height: 1; }
   .bar { width: 100%; max-width: 360px; height: 10px; background: var(--panel); border-radius: 6px; overflow: hidden; }
   .bar > i { display: block; height: 100%; background: var(--gold); }
 </style>

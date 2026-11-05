@@ -1,6 +1,6 @@
 import {
   CONFIGURED, ROOM, rref, onValue, set, update, remove, now,
-  GAMES, GAME_ORDER, TEAM, HANDS, beats, rankEntries, REACT_ROUNDS, REACT_PENALTY, esc, setupWarning
+  GAMES, GAME_ORDER, TEAM, HANDS, HAND_ICON, beats, rankEntries, REACT_ROUNDS, REACT_PENALTY, esc, setupWarning
 } from "./common.js";
 
 const $ = (q) => document.querySelector(q);
@@ -29,7 +29,7 @@ onValue(rref(), (s) => {
 // ---------- 공통 도우미 ----------
 const plist = () => Object.entries(D.players || {}).map(([pid, p]) => ({ pid, ...p })).sort((a, b) => (a.joinedAt || 0) - (b.joinedAt || 0));
 const nameOf = (pid) => D.players?.[pid]?.name || "?";
-const teamColor = (pid) => TEAM[D.players?.[pid]?.team]?.color || "#999";
+const teamColor = () => "var(--gold)";
 const keyOf = (s) => [s.phase, s.game, s.round, s.q, s.startAt].join("|");
 const setState = (s) => set(rref("state"), s);
 const gameNo = (g) => GAME_ORDER.indexOf(g) + 1;
@@ -216,10 +216,7 @@ function lobbyView() {
       <div>
         <p class="h-sub">폰 카메라로 QR을 찍고 별명을 입력하세요</p>
         <p class="h-title" style="margin:8px 0 24px">참가자 <span id="cnt">0</span>명</p>
-        <p class="team-purple" style="font-size:20px;font-weight:700;margin-bottom:10px">퍼플팀</p>
-        <div class="chips" id="pt" style="margin-bottom:24px"></div>
-        <p class="team-gold" style="font-size:20px;font-weight:700;margin-bottom:10px">골드팀</p>
-        <div class="chips" id="gt"></div>
+        <div class="chips" id="pt"></div>
       </div>
     </div>`;
   new QRCode($("#qr"), { text: url, width: 280, height: 280, colorDark: "#1C1029", colorLight: "#ffffff" });
@@ -231,9 +228,8 @@ function lobbyView() {
     update() {
       const ps = plist();
       $("#cnt").textContent = ps.length;
-      const chip = (p) => `<span class="chip ${p.team}">${esc(p.name)}</span>`;
-      $("#pt").innerHTML = ps.filter((p) => p.team === "purple").map(chip).join("") || `<span class="muted">아직 없어요</span>`;
-      $("#gt").innerHTML = ps.filter((p) => p.team === "gold").map(chip).join("") || `<span class="muted">아직 없어요</span>`;
+      const chip = (p) => `<span class="chip gold">${esc(p.name)}</span>`;
+      $("#pt").innerHTML = ps.map(chip).join("") || `<span class="muted">아직 없어요</span>`;
     }
   };
 }
@@ -359,7 +355,8 @@ function rpsPlayView(s) {
   const alive = Object.keys(D.rps?.alive || {});
   stage.innerHTML = `<div class="center">
       <p class="serif gold" style="font-size:28px">ROUND ${s.round} · 생존 ${alive.length}명</p>
-      <p class="h-title" style="font-size:100px">가위바위보!</p>
+      <p style="font-size:110px;line-height:1">${HAND_ICON.scissors} ${HAND_ICON.rock} ${HAND_ICON.paper}</p>
+      <p class="h-title" style="font-size:80px">가위바위보!</p>
       <p class="clock" id="clk" style="font-size:80px"></p><p class="h-sub" id="cnt"></p>
       ${alive.length <= 3 ? `<p class="h-sub" style="color:var(--gold)">이제 이긴 사람만 살아남아요</p>` : ""}</div>`;
   setControls("폰에서 가위·바위·보 중 하나를 고르세요", [{ label: "중단하고 로비로", cls: "ghost", on: () => setState({ phase: "lobby" }) }]);
@@ -372,11 +369,12 @@ function rpsPlayView(s) {
 function rpsRevealView(s) {
   const alive = Object.keys(D.rps?.alive || {});
   const out = s.out || [];
-  const chip = (pid, cls) => `<span class="chip ${D.players?.[pid]?.team || ""} ${cls}">${esc(nameOf(pid))}</span>`;
+  const chip = (pid, cls) => `<span class="chip gold ${cls}">${esc(nameOf(pid))}</span>`;
   stage.innerHTML = `<div class="center">
       <p class="serif gold" style="font-size:28px">ROUND ${s.round} 결과</p>
       <p class="h-sub" style="font-size:32px">노트북이 낸 손</p>
-      <p class="h-title" style="font-size:140px;color:var(--gold)">${HANDS[s.hostHand]}</p>
+      <p style="font-size:180px;line-height:1">${HAND_ICON[s.hostHand]}</p>
+      <p class="h-title" style="color:var(--gold)">${HANDS[s.hostHand]}</p>
       <p class="h-sub">${s.revived ? "모두 탈락! 이번 라운드는 전원 부활" : `생존 ${alive.length}명 · 탈락 ${out.length}명`}</p>
       <div class="chips" style="justify-content:center;max-width:1100px">${alive.map((p) => chip(p, "")).join("")}${out.map((p) => chip(p, "out")).join("")}</div></div>`;
   const btns = [];
@@ -392,7 +390,7 @@ function rpsRevealView(s) {
 function podium(list, valKey) {
   const top = [list.find((e) => e.rank === 2) || list[1], list[0], list.find((e) => e.rank === 3) || list[2]];
   const h = [150, 210, 110];
-  return `<div class="podium">${top.map((e, i) => e ? `<div class="pod"><p class="nm" style="color:${TEAM[e.team]?.color || "#fff"}">${esc(e.name)}</p>
+  return `<div class="podium">${top.map((e, i) => e ? `<div class="pod"><p class="nm" style="color:var(--text)">${esc(e.name)}</p>
     <p class="muted" style="margin-bottom:8px">${esc(valKey(e))}</p><div class="blk" style="height:${h[i]}px">${e.rank}</div></div>` : "").join("")}</div>`;
 }
 
@@ -401,7 +399,7 @@ function resultView(s) {
   stage.innerHTML = `<p class="serif gold" style="font-size:28px;text-align:center">GAME ${gameNo(s.game)} RESULT</p>
     <p class="h-title" style="text-align:center">${esc(GAMES[s.game].name)}</p>
     ${podium(list, (e) => e.label)}
-    <div class="rows">${list.slice(3).map((e) => `<div class="row"><span class="rk">${e.rank}</span><span class="nm" style="color:${TEAM[e.team]?.color}">${esc(e.name)}</span><span class="muted">${esc(e.label)}</span><span class="val">+${e.points}점</span></div>`).join("")}</div>`;
+    <div class="rows">${list.slice(3).map((e) => `<div class="row"><span class="rk">${e.rank}</span><span class="nm">${esc(e.name)}</span><span class="muted">${esc(e.label)}</span><span class="val">+${e.points}점</span></div>`).join("")}</div>`;
   const ng = nextGame(s.game);
   setControls("순위대로 점수가 쌓여요 (1위 = 참가자 수만큼)", [
     { label: "로비로", cls: "ghost", on: () => setState({ phase: "lobby" }) },
@@ -413,17 +411,11 @@ function resultView(s) {
 // ---------- 화면: 종합 결과 ----------
 function finalView() {
   const list = D.final || [];
-  const avg = (team) => { const m = list.filter((e) => e.team === team); return m.length ? (m.reduce((a, e) => a + e.total, 0) / m.length).toFixed(1) : "0"; };
-  const pa = Number(avg("purple")), ga = Number(avg("gold"));
-  const win = pa === ga ? "무승부!" : pa > ga ? "퍼플팀 우승!" : "골드팀 우승!";
+  const champ = list.filter((e) => e.rank === 1).map((e) => e.name).join(", ");
   stage.innerHTML = `<p class="serif gold" style="font-size:32px;text-align:center">FINAL</p>
-    <p class="h-title" style="text-align:center;margin-bottom:16px">${win}</p>
-    <div class="teams" style="margin:0 auto 12px">
-      <div class="card" style="text-align:center;border-color:var(--purple)"><p class="team-purple" style="font-size:24px;font-weight:700">퍼플팀 평균</p><p style="font-size:56px;font-weight:900">${pa}</p></div>
-      <div class="card" style="text-align:center;border-color:var(--gold)"><p class="team-gold" style="font-size:24px;font-weight:700">골드팀 평균</p><p style="font-size:56px;font-weight:900">${ga}</p></div>
-    </div>
+    <p class="h-title" style="text-align:center;margin-bottom:16px">${champ ? `우승 ${esc(champ)}!` : "최종 순위"}</p>
     ${podium(list, (e) => `${e.total}점`)}
-    <div class="rows">${list.slice(3).map((e) => `<div class="row"><span class="rk">${e.rank}</span><span class="nm" style="color:${TEAM[e.team]?.color}">${esc(e.name)}</span><span></span><span class="val">${e.total}점</span></div>`).join("")}</div>`;
+    <div class="rows">${list.slice(3).map((e) => `<div class="row"><span class="rk">${e.rank}</span><span class="nm">${esc(e.name)}</span><span></span><span class="val">${e.total}점</span></div>`).join("")}</div>`;
   setControls("Cheers to 2026!", [{ label: "로비로", cls: "ghost", on: () => setState({ phase: "lobby" }) }]);
   return {};
 }

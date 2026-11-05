@@ -1,6 +1,6 @@
 import {
   CONFIGURED, ROOM, rref, onValue, set, get, update, now, GAMES, TEAM, HANDS,
-  moleSchedule, MOLE_POINTS, TAP_CAP_PER_SEC, REACT_PENALTY, esc, setupWarning
+  moleSchedule, MOLE_POINTS, TAP_CAP_PER_SEC, REACT_PENALTY, esc, setupWarning, HAND_ICON, moleSvg
 } from "./common.js";
 
 const app = document.getElementById("app");
@@ -25,7 +25,7 @@ function shell(inner) {
   app.innerHTML = `
     <div class="top">
       <span class="serif gold" style="font-size:18px;font-weight:700">BOA GAME</span>
-      <span>${me ? `<span class="dot" style="background:${team.color}"></span> ${esc(me.name)}` : ""}</span>
+      <span>${me ? esc(me.name) : ""}</span>
     </div>
     <div class="stage">${inner}</div>`;
   return app.querySelector(".stage");
@@ -48,26 +48,14 @@ function renderJoin(msg = "") {
       <label for="nick" class="muted">별명 (2~8자)</label>
       <input id="nick" maxlength="8" autocomplete="off" placeholder="예: 절세왕">
     </div>
-    <div class="teams">
-      <button class="team-btn" data-team="purple"><span class="team-purple">퍼플팀</span><br><small class="muted">남성</small></button>
-      <button class="team-btn" data-team="gold"><span class="team-gold">골드팀</span><br><small class="muted">여성</small></button>
-    </div>
     <p class="err" id="err">${esc(msg)}</p>
     <button class="btn" id="go" style="width:100%;max-width:360px">입장하기</button>`);
   const nick = st.querySelector("#nick");
-  st.querySelectorAll(".team-btn").forEach((b) => {
-    b.addEventListener("click", () => {
-      joinTeam = b.dataset.team;
-      st.querySelectorAll(".team-btn").forEach((x) => x.classList.remove("sel-purple", "sel-gold"));
-      b.classList.add("sel-" + joinTeam);
-    });
-  });
   st.querySelector("#go").addEventListener("click", async () => {
     const name = nick.value.trim();
     const err = st.querySelector("#err");
     if (name.length < 2) return (err.textContent = "별명을 2자 이상 입력해 주세요.");
     if (/[.#$\[\]\/]/.test(name)) return (err.textContent = "특수문자 . # $ [ ] / 는 쓸 수 없어요.");
-    if (!joinTeam) return (err.textContent = "팀을 골라 주세요.");
     const btn = st.querySelector("#go"); btn.disabled = true;
     try {
       const owner = (await get(rref(`names/${name}`))).val();
@@ -75,13 +63,13 @@ function renderJoin(msg = "") {
         const other = (await get(rref(`players/${owner}`))).val();
         if (other && other.allowRejoin) {
           pid = owner; localStorage.setItem(LS, pid);
-          await update(rref(`players/${pid}`), { allowRejoin: null, team: joinTeam });
+          await update(rref(`players/${pid}`), { allowRejoin: null });
           keepAwake(); listenMe(); return;
         }
         if (other) { btn.disabled = false; return (err.textContent = "이미 쓰는 별명이에요. 다른 별명을 입력해 주세요."); }
       }
       await set(rref(`names/${name}`), pid);
-      await set(rref(`players/${pid}`), { name, team: joinTeam, joinedAt: now() });
+      await set(rref(`players/${pid}`), { name, joinedAt: now() });
       keepAwake(); listenMe();
     } catch (e) {
       btn.disabled = false; err.textContent = "연결이 불안정해요. 다시 눌러 주세요.";
@@ -135,11 +123,9 @@ function startCtrl(fn, s) { if (ctrl) return; ctrl = fn(s) || {}; }
 
 // ---------- 대기 화면 ----------
 function lobby() {
-  const t = TEAM[me.team];
   shell(`
     <p class="muted">입장 완료</p>
-    <p class="big" style="font-size:44px;color:${t.color}">${esc(me.name)}</p>
-    <p class="title" style="color:${t.color}">${t.name}</p>
+    <p class="big gold" style="font-size:44px">${esc(me.name)}</p>
     <p class="muted" style="margin-top:12px">현재 ${playerCount}명 입장<br>진행자가 시작하면 화면이 자동으로 바뀌어요.</p>
     <p class="muted" style="font-size:13px">화면을 켜 둔 채로 기다려 주세요.</p>`);
 }
@@ -162,7 +148,7 @@ function tapGame(s) {
   const st = shell(`
     <p class="muted" id="info">준비</p>
     <p class="big" id="cnt">0</p>
-    <button class="tap-btn" id="tap" style="background:${TEAM[me.team].color}">TAP</button>`);
+    <button class="tap-btn" id="tap" style="background:var(--gold)">TAP</button>`);
   const info = st.querySelector("#info"), cnt = st.querySelector("#cnt"), btn = st.querySelector("#tap");
   let count = 0, sent = -1, done = false, raf = 0;
   const recent = [];
@@ -215,7 +201,7 @@ function moleGame(s) {
     if (navigator.vibrate) navigator.vibrate(a.type === "bomb" ? 80 : 10);
   }));
   const iv = setInterval(() => { if (score !== sent && !done) { sent = score; set(rref(`live/mole/${pid}`), score); } }, 300);
-  const labels = { mole: "+1", gold: "+5", bomb: "폭탄" };
+  const pics = { mole: moleSvg("mole"), gold: moleSvg("gold"), bomb: moleSvg("bomb") };
   const loop = () => {
     const t = now();
     const cd = countdownText(s.startAt);
@@ -226,7 +212,7 @@ function moleGame(s) {
       const a = !cd && t < s.endAt ? active(h, el) : null;
       const cls = a ? a.type : "";
       if (b.dataset.cls !== cls) {
-        b.dataset.cls = cls; b.className = "hole" + (cls ? " " + cls : ""); b.textContent = a ? labels[a.type] : "";
+        b.dataset.cls = cls; b.className = "hole" + (cls ? " " + cls : ""); b.innerHTML = a ? pics[a.type] : "";
       }
     });
     if (t >= s.endAt && !done) {
@@ -332,9 +318,9 @@ function rpsGame(s) {
     <p class="muted">라운드 ${s.round} · 생존 ${Object.keys(rpsAlive).length}명</p>
     <p class="big" id="cd" style="font-size:40px">가위바위…</p>
     <div class="choice-row" style="grid-template-columns:repeat(3,1fr)">
-      <button class="choice" data-h="scissors">가위</button>
-      <button class="choice" data-h="rock">바위</button>
-      <button class="choice" data-h="paper">보</button>
+      <button class="choice hand" data-h="scissors"><span class="hand-ic">${HAND_ICON.scissors}</span>가위</button>
+      <button class="choice hand" data-h="rock"><span class="hand-ic">${HAND_ICON.rock}</span>바위</button>
+      <button class="choice hand" data-h="paper"><span class="hand-ic">${HAND_ICON.paper}</span>보</button>
     </div>
     <p class="muted" id="info"></p>`);
   const cdEl = st.querySelector("#cd"), info = st.querySelector("#info");
@@ -367,8 +353,9 @@ async function rpsReveal(s) {
   if (!wasIn) { shell(`<p class="title">탈락</p><p class="muted">화면에서 생존자를 응원해 주세요!</p>`); return; }
   shell(`
     <p class="muted">라운드 ${s.round} 결과</p>
+    <p style="font-size:72px;line-height:1">${HAND_ICON[s.hostHand]}</p>
     <p class="title">노트북: ${HANDS[s.hostHand]}</p>
-    <p class="muted">나: ${mine ? HANDS[mine] : "선택 안 함"}</p>
+    <p class="muted">나: ${mine ? HAND_ICON[mine] + " " + HANDS[mine] : "선택 안 함"}</p>
     <p class="big" style="color:${alive ? "var(--good)" : "var(--bad)"}">${alive ? "생존!" : "탈락"}</p>
     <p class="muted">${s.revived ? "모두 탈락해서 전원 부활!" : `남은 인원 ${Object.keys(rpsAlive).length}명`}</p>`);
 }
