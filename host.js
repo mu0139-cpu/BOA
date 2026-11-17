@@ -206,7 +206,10 @@ setInterval(() => {
 
 // ---------- 화면: 로비 ----------
 function lobbyView() {
-  const url = new URL("index.html", location.href).href;
+  const u = new URL("index.html", location.href);
+  u.search = "";
+  if (ROOM !== "BOA26") u.searchParams.set("room", ROOM);
+  const url = u.href;
   stage.innerHTML = `
     <div class="lobby">
       <div style="text-align:center">

@@ -5,7 +5,9 @@ import {
 import { firebaseConfig, ROOM_CODE } from "./firebase-config.js";
 
 export const CONFIGURED = !String(firebaseConfig.apiKey).startsWith("PASTE");
-export const ROOM = ROOM_CODE;
+// 주소에 ?room=방이름 을 붙이면 그 방을 따로 씁니다. 없으면 기본 방(ROOM_CODE).
+const roomParam = (new URLSearchParams(location.search).get("room") || "").trim();
+export const ROOM = roomParam && !/[.#$\[\]\/]/.test(roomParam) ? roomParam : ROOM_CODE;
 
 let db = null;
 if (CONFIGURED) {
