@@ -1,6 +1,7 @@
 import {
   CONFIGURED, ROOM, rref, onValue, set, get, update, now, GAMES, TEAM, HANDS,
-  moleSchedule, MOLE_POINTS, TAP_CAP_PER_SEC, REACT_PENALTY, esc, setupWarning, HAND_ICON, moleSvg, moleLegend
+  moleSchedule, MOLE_POINTS, TAP_CAP_PER_SEC, REACT_PENALTY, esc, setupWarning, HAND_ICON, moleSvg, moleLegend,
+  DEFAULT_TITLE, dungiSvg, TTEOK_ROUNDS, tteokRoundCfg, tteokSceneHtml
 } from "./common.js";
 
 const app = document.getElementById("app");
@@ -19,12 +20,21 @@ let rpsAlive = {};
 let rpsElim = {};
 let joinTeam = null;
 
+// 타이틀은 진행자가 언제든 바꿀 수 있어서 실시간으로 받아 온다
+let TITLE = DEFAULT_TITLE;
+onValue(rref("title"), (s) => {
+  TITLE = s.val() || DEFAULT_TITLE;
+  document.title = TITLE;
+  const el = document.getElementById("ttl");
+  if (el) el.textContent = TITLE;
+});
+
 // ---------- 화면 틀 ----------
 function shell(inner) {
   const team = me ? TEAM[me.team] : null;
   app.innerHTML = `
     <div class="top">
-      <span class="serif gold" style="font-size:18px;font-weight:700">BOA GAME</span>
+      <span id="ttl" class="serif gold" style="font-size:18px;font-weight:700">${esc(TITLE)}</span>
       <span>${me ? esc(me.name) : ""}</span>
     </div>
     <div class="stage">${inner}</div>`;
@@ -110,9 +120,11 @@ function render(force) {
     if (s.game === "react") return startCtrl(reactGame, s);
     if (s.game === "minority") return startCtrl(minorityGame, s);
     if (s.game === "rps") return startCtrl(rpsGame, s);
+    if (s.game === "tteok") return startCtrl(tteokGame, s);
   }
   if (s.phase === "reveal" && s.game === "minority") return minorityReveal(s);
   if (s.phase === "reveal" && s.game === "rps") return rpsReveal(s);
+  if (s.phase === "reveal" && s.game === "tteok") return tteokReveal(s);
   if (s.phase === "wait") return shell(`<p class="title">${esc(GAMES[s.game]?.name || "")}</p><p class="muted">다음 라운드를 기다리는 중…</p>`);
   if (s.phase === "result") return gameResult(s);
   if (s.phase === "final") return finalResult();
@@ -132,7 +144,7 @@ function lobby() {
 
 function intro(s) {
   const g = GAMES[s.game];
-  shell(`<p class="muted">곧 시작</p><p class="big" style="font-size:40px">${esc(g.name)}</p><p class="title" style="font-size:20px;line-height:1.6">${esc(g.rule)}</p>${s.game === "mole" ? moleLegend(82, 15) : ""}`);
+  shell(`<p class="muted">곧 시작</p><p class="big" style="font-size:40px">${esc(g.name)}</p><p class="title" style="font-size:20px;line-height:1.6">${esc(g.rule)}</p>${s.game === "mole" ? moleLegend(82, 15) : ""}${s.game === "tteok" ? `<div class="dungi-preview">${dungiSvg("happy")}</div>` : ""}`);
 }
 
 // 공통: 카운트다운 문구
@@ -358,6 +370,57 @@ async function rpsReveal(s) {
     <p class="muted">나: ${mine ? HAND_ICON[mine] + " " + HANDS[mine] : "선택 안 함"}</p>
     <p class="big" style="color:${alive ? "var(--good)" : "var(--bad)"}">${alive ? "생존!" : "탈락"}</p>
     <p class="muted">${s.revived ? "모두 탈락해서 전원 부활!" : `남은 인원 ${Object.keys(rpsAlive).length}명`}</p>`);
+}
+
+// ---------- 게임 6 : 떡먹는 용만이 ----------
+function tteokGame(s) {
+  const cfg = tteokRoundCfg(s.seed, s.round);
+  if (now() > s.endAt + 1500) { shell(`<p class="title">이번 라운드는 지나갔어요</p><p class="muted">다음 라운드를 기다려 주세요.</p>`); return; }
+  const st = shell(`
+    <p class="muted">떡먹는 용만이 · 라운드 ${s.round}/${TTEOK_ROUNDS}</p>
+    <div id="scene" class="scene-wrap"></div>
+    <p class="title" id="msg" style="font-size:22px"></p>
+    <div class="tt-slots" style="grid-template-columns:repeat(${cfg.n},1fr)">${Array.from({ length: cfg.n }, (_, i) => `<button class="tt-slot" data-s="${i}" disabled>${i + 1}</button>`).join("")}</div>
+    <p class="muted" id="info"></p>`);
+  const scene = st.querySelector("#scene"), msg = st.querySelector("#msg"), info = st.querySelector("#info");
+  const slots = [...st.querySelectorAll(".tt-slot")];
+  let picked = null, raf = 0;
+  slots.forEach((b) => b.addEventListener("pointerdown", (e) => {
+    e.preventDefault();
+    const ms = now() - s.startAt;
+    if (picked !== null || ms < cfg.ansAt || ms >= cfg.total) return;
+    picked = Number(b.dataset.s);
+    slots.forEach((x) => x.classList.toggle("on", x === b));
+    set(rref(`results/tteok/r${s.round}/${pid}`), { s: picked, t: Math.round(ms - cfg.ansAt) });
+    if (navigator.vibrate) navigator.vibrate(10);
+  }));
+  const loop = () => {
+    const ms = now() - s.startAt;
+    const cd = countdownText(s.startAt);
+    scene.innerHTML = tteokSceneHtml(cfg, Math.max(0, ms));
+    const inAnswer = !cd && ms >= cfg.ansAt && ms < cfg.total;
+    slots.forEach((b) => (b.disabled = !(inAnswer && picked === null)));
+    if (cd) { msg.textContent = "곧 시작!"; info.textContent = `${cd}초 후 시작`; }
+    else if (ms < cfg.dropEnd) { msg.textContent = "둥이가 떡을 먹어요!"; info.textContent = ""; }
+    else if (ms < cfg.ansAt) { msg.textContent = "둥이들이 섞여요! 잘 보세요"; info.textContent = ""; }
+    else if (ms < cfg.total) { msg.textContent = "떡을 먹은 둥이는 어디?"; info.textContent = picked === null ? `남은 시간 ${Math.ceil((cfg.total - ms) / 1000)}초` : "답을 보냈어요"; }
+    else { msg.textContent = picked === null ? "시간 종료" : "답을 보냈어요"; info.textContent = "결과는 화면에서 확인하세요"; }
+    raf = requestAnimationFrame(loop);
+  };
+  loop();
+  return { stop() { cancelAnimationFrame(raf); } };
+}
+
+async function tteokReveal(s) {
+  const cfg = tteokRoundCfg(s.seed, s.round);
+  const mine = (await get(rref(`results/tteok/r${s.round}/${pid}`))).val();
+  if (keyOf(state) !== keyOf(s)) return;
+  const ok = !!mine && mine.s === cfg.answer;
+  shell(`
+    <p class="muted">라운드 ${s.round} 결과</p>
+    <p class="title">정답은 ${cfg.answer + 1}번 자리!</p>
+    <p class="big" style="color:${ok ? "var(--good)" : "var(--bad)"};font-size:52px">${ok ? "정답!" : mine ? "아쉬워요" : "답 안 함"}</p>
+    <p class="muted">${mine ? `내 답: ${mine.s + 1}번` : "노트북 화면에서 순위를 확인하세요"}</p>`);
 }
 
 // ---------- 결과 ----------

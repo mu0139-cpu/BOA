@@ -54,15 +54,21 @@
 <body>
 <div id="wrap">
   <header>
-    <span class="logo serif gold">BOA GAME NIGHT</span>
+    <span class="logo serif gold" id="logo">BOA GAME NIGHT</span>
     <span class="meta" id="meta"></span>
     <span class="spacer"></span>
+    <button class="btn ghost" id="edit-title">타이틀 변경</button>
     <button class="btn ghost" id="manage">참가자 관리</button>
   </header>
   <main id="stage"></main>
   <footer id="controls"></footer>
 </div>
 <dialog id="dlg">
+  <h2 style="margin-bottom:12px">게임 타이틀</h2>
+  <div style="display:flex;gap:10px;margin-bottom:24px">
+    <input id="title-in" maxlength="30" placeholder="비우면 기본 타이틀" style="flex:1;background:var(--panel);color:var(--text);border:1px solid var(--line);border-radius:12px;padding:12px 14px;font:inherit;font-size:18px">
+    <button class="btn" id="save-title">타이틀 저장</button>
+  </div>
   <h2 style="margin-bottom:12px">참가자 관리</h2>
   <p class="muted" style="margin-bottom:12px">폰을 바꿔야 하는 분은 ‘재입장 허용’을 누른 뒤 새 폰에서 같은 별명으로 입장하면 점수가 이어져요.</p>
   <div id="mlist"></div>

@@ -1,6 +1,7 @@
 import {
-  CONFIGURED, ROOM, rref, onValue, set, update, remove, now,
-  GAMES, GAME_ORDER, TEAM, HANDS, HAND_ICON, moleLegend, beats, rankEntries, REACT_ROUNDS, REACT_PENALTY, esc, setupWarning
+  CONFIGURED, ROOM, rref, onValue, set, update, get, remove, now,
+  GAMES, GAME_ORDER, TEAM, HANDS, HAND_ICON, moleLegend, beats, rankEntries, REACT_ROUNDS, REACT_PENALTY, esc, setupWarning,
+  DEFAULT_TITLE, dungiSvg, TTEOK_ROUNDS, tteokRoundCfg, tteokSceneHtml, tteokFrame
 } from "./common.js";
 
 const $ = (q) => document.querySelector(q);
@@ -58,6 +59,7 @@ function draw() {
   drawQueued = false;
   const s = D.state;
   meta.textContent = `방 코드 ${ROOM} · 참가자 ${plist().length}명`;
+  $("#logo").textContent = D.title || DEFAULT_TITLE;
   const k = keyOf(s);
   if (k !== curKey) { curKey = k; view = build(s); }
   view?.update?.();
@@ -66,9 +68,9 @@ function draw() {
 function build(s) {
   if (s.phase === "lobby") return lobbyView();
   if (s.phase === "intro") return introView(s);
-  if (s.phase === "play") return ({ tap: raceView, mole: moleView, react: reactPlayView, minority: minorityPlayView, rps: rpsPlayView })[s.game](s);
+  if (s.phase === "play") return ({ tap: raceView, mole: moleView, react: reactPlayView, minority: minorityPlayView, rps: rpsPlayView, tteok: tteokHostView })[s.game](s);
   if (s.phase === "wait") return reactWaitView(s);
-  if (s.phase === "reveal") return s.game === "minority" ? minorityRevealView(s) : rpsRevealView(s);
+  if (s.phase === "reveal") return s.game === "minority" ? minorityRevealView(s) : s.game === "tteok" ? tteokRevealView(s) : rpsRevealView(s);
   if (s.phase === "result") return resultView(s);
   if (s.phase === "final") return finalView();
   return null;
@@ -77,6 +79,11 @@ function build(s) {
 // ---------- 진행 동작 ----------
 async function startGame(g) {
   const t = now();
+  if (g === "tteok") {
+    const seed = Math.floor(Math.random() * 1e9);
+    await update(rref(), { "results/tteok": null, "tteok/seed": seed });
+    startTteokRound(1, seed);
+  }
   if (g === "tap" || g === "mole") {
     await update(rref(), {
       [`live/${g}`]: null, [`results/${g}`]: null,
@@ -100,6 +107,17 @@ async function startGame(g) {
 function startReactRound(n) {
   const s = now() + 3000, go = s + 2000 + Math.floor(Math.random() * 3000);
   setState({ phase: "play", game: "react", round: n, startAt: s, goAt: go, endAt: go + 2500 });
+}
+
+function startTteokRound(r, seed = D.tteok?.seed) {
+  const cfg = tteokRoundCfg(seed, r);
+  const s = now() + 3000;
+  setState({ phase: "play", game: "tteok", round: r, seed, startAt: s, endAt: s + cfg.total });
+}
+
+function revealTteok(s) {
+  const cfg = tteokRoundCfg(s.seed, s.round);
+  update(rref(), { state: { ...s, phase: "reveal", answer: cfg.answer } });
 }
 
 function startMinorityQ(i, qs = D.minority?.questions || []) {
@@ -165,12 +183,24 @@ function computeList(g) {
     entries = ps.map((p) => ({ pid: p.pid, v: D.minority?.pts?.[p.pid] || 0 }));
     better = (a, b) => b.v - a.v;
     label = (v) => `${v}점`;
+  } else if (g === "tteok") {
+    entries = ps.map((p) => {
+      let correct = 0, time = 0;
+      for (let r = 1; r <= TTEOK_ROUNDS; r++) {
+        const pick = R.tteok?.[`r${r}`]?.[p.pid];
+        if (!pick || D.tteok?.seed == null) continue;
+        if (pick.s === tteokRoundCfg(D.tteok.seed, r).answer) { correct++; time += pick.t || 0; }
+      }
+      return { pid: p.pid, v: correct * 1e7 - time, label: `${correct}/${TTEOK_ROUNDS}회 정답` };
+    });
+    better = (a, b) => b.v - a.v;
+    label = () => "";
   } else {
     entries = ps.map((p) => ({ pid: p.pid, v: D.rps?.alive?.[p.pid] ? 999 : (D.rps?.elim?.[p.pid] || 0) }));
     better = (a, b) => b.v - a.v;
     label = (v) => (v === 999 ? "최후의 생존" : v ? `${v}라운드 탈락` : "불참");
   }
-  return rankEntries(entries, better).map((e) => ({ ...e, name: nameOf(e.pid), team: D.players?.[e.pid]?.team || "", label: label(e.v) }));
+  return rankEntries(entries, better).map((e) => ({ ...e, name: nameOf(e.pid), team: D.players?.[e.pid]?.team || "", label: e.label ?? label(e.v) }));
 }
 
 async function finishGame(g) {
@@ -200,6 +230,7 @@ setInterval(() => {
       else finishGame("react");
     } else if (s.game === "minority") revealMinority(s);
     else if (s.game === "rps") revealRps(s);
+    else if (s.game === "tteok") revealTteok(s);
   }
   if (s.phase === "wait" && t > s.nextAt) { done.add(k); startReactRound(s.round + 1); }
 }, 200);
@@ -250,6 +281,7 @@ function introView(s) {
         <textarea id="qs">${esc(D.minority?.text || DEFAULT_QUESTIONS)}</textarea></div>` : ""}
       ${s.game === "rps" ? `<p class="muted" style="font-size:22px">4명 이상일 땐 비겨도 생존, 3명 이하부터는 이긴 사람만 생존</p>` : ""}
       ${s.game === "mole" ? moleLegend(150, 26) : ""}
+      ${s.game === "tteok" ? `<div style="width:220px;height:220px">${dungiSvg("happy")}</div>` : ""}
     </div>`;
   setControls("모두의 폰에 규칙이 표시되고 있어요", [
     { label: "로비로", cls: "ghost", on: () => setState({ phase: "lobby" }) },
@@ -291,6 +323,55 @@ function moleView(s) {
       this.tick();
     }
   };
+}
+
+// ---------- 화면: 떡먹는 용만이 ----------
+function tteokHostView(s) {
+  const cfg = tteokRoundCfg(s.seed, s.round);
+  stage.innerHTML = `<div style="display:flex;justify-content:space-between;align-items:flex-end;margin-bottom:8px">
+      <p class="h-title">떡먹는 용만이 <span class="gold" style="font-size:36px">ROUND ${s.round} / ${TTEOK_ROUNDS}</span></p>
+      <p class="clock" id="clk" style="font-size:90px"></p></div>
+    <p class="h-sub" id="sub" style="font-size:32px"></p>
+    <div id="scene" style="display:flex;justify-content:center;margin-top:28px"></div>`;
+  setControls("TV 화면을 보며 폰으로 답을 고르세요", [{ label: "중단하고 로비로", cls: "ghost", on: () => setState({ phase: "lobby" }) }]);
+  const loop = () => {
+    const el = document.querySelector("#scene");
+    if (!el) return;                          // 다른 화면으로 바뀌면 멈춤
+    const t = now(), ms = t - s.startAt;
+    let phase = "", clk = "";
+    if (ms < 0) { phase = "곧 시작!"; clk = String(Math.ceil(-ms / 1000)); }
+    else if (ms < cfg.ansAt) { phase = ms < cfg.dropEnd ? "둥이가 떡을 먹어요!" : "둥이들이 자리를 바꿔요! 잘 보세요"; }
+    else if (ms < cfg.total) {
+      const n = Object.keys(D.results?.tteok?.[`r${s.round}`] || {}).length;
+      phase = `떡을 먹은 둥이는 어디? 번호를 고르세요 (답 ${n}/${plist().length})`;
+      clk = Math.ceil((cfg.total - ms) / 1000) + "초";
+    }
+    else phase = "답 마감!";
+    $("#sub").textContent = phase;
+    $("#clk").textContent = clk;
+    el.innerHTML = tteokSceneHtml(cfg, Math.max(0, ms));
+    requestAnimationFrame(loop);
+  };
+  loop();
+  return {};
+}
+
+function tteokRevealView(s) {
+  const cfg = tteokRoundCfg(s.seed, s.round);
+  const picks = D.results?.tteok?.[`r${s.round}`] || {};
+  const ok = plist().filter((p) => picks[p.pid]?.s === cfg.answer);
+  const last = s.round >= TTEOK_ROUNDS;
+  stage.innerHTML = `<div class="center">
+      <p class="serif gold" style="font-size:28px">ROUND ${s.round} 결과</p>
+      <p class="h-title">정답은 ${cfg.answer + 1}번 자리!</p>
+      <div style="width:100%;max-width:820px">${tteokSceneHtml(cfg, cfg.total, { mark: cfg.answer })}</div>
+      <p class="h-sub" style="font-size:32px">정답 ${ok.length} / ${plist().length}명</p>
+      <div class="chips" style="justify-content:center;max-width:1100px">${ok.map((p) => `<span class="chip gold">${esc(p.name)}</span>`).join("")}</div></div>`;
+  const btns = [];
+  if (!last) btns.push({ label: "여기서 끝내기", cls: "ghost", on: () => finishGame("tteok") });
+  btns.push(last ? { label: "결과 보기", on: () => finishGame("tteok") } : { label: "다음 라운드", on: () => startTteokRound(s.round + 1) });
+  setControls(last ? "마지막 라운드예요" : `다음 라운드는 둥이가 ${s.round + 1 > 3 ? 5 : 3}마리예요`, btns);
+  return {};
 }
 
 // ---------- 화면: 번개 터치 ----------
@@ -432,6 +513,16 @@ function renderManage() {
     <button class="btn ghost" data-re="${p.pid}">재입장 허용</button><button class="btn danger" data-del="${p.pid}">삭제</button></div>`).join("") || `<p class="muted">참가자가 없어요</p>`;
 }
 $("#manage").addEventListener("click", () => { renderManage(); dlg.showModal(); });
+$("#edit-title").addEventListener("click", () => {
+  $("#title-in").value = D.title || "";
+  dlg.showModal(); $("#title-in").focus();
+});
+$("#save-title").addEventListener("click", async () => {
+  const t = $("#title-in").value.trim().slice(0, 30);
+  await set(rref("title"), t || null);   // 비우면 기본 타이틀
+  $("#save-title").textContent = "저장됨 ✓";
+  setTimeout(() => ($("#save-title").textContent = "타이틀 저장"), 1200);
+});
 $("#close").addEventListener("click", () => dlg.close());
 $("#mlist").addEventListener("click", async (e) => {
   const re = e.target.dataset.re, del = e.target.dataset.del;
@@ -442,7 +533,9 @@ $("#mlist").addEventListener("click", async (e) => {
   renderManage();
 });
 $("#reset").addEventListener("click", async () => {
-  if (!confirm("참가자와 점수를 모두 지우고 처음부터 시작할까요?")) return;
+  if (!confirm("참가자와 점수를 모두 지우고 처음부터 시작할까요? (타이틀은 유지돼요)")) return;
+  const title = D.title || null;
   await remove(rref());
+  if (title) await set(rref("title"), title);
   location.reload();
 });
