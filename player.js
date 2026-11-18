@@ -372,12 +372,12 @@ async function rpsReveal(s) {
     <p class="muted">${s.revived ? "모두 탈락해서 전원 부활!" : `남은 인원 ${Object.keys(rpsAlive).length}명`}</p>`);
 }
 
-// ---------- 게임 6 : 떡먹는 용만이 ----------
+// ---------- 게임 6 : 떡먹은둥이찾기 ----------
 function tteokGame(s) {
   const cfg = tteokRoundCfg(s.seed, s.round);
   if (now() > s.endAt + 1500) { shell(`<p class="title">이번 라운드는 지나갔어요</p><p class="muted">다음 라운드를 기다려 주세요.</p>`); return; }
   const st = shell(`
-    <p class="muted">떡먹는 용만이 · 라운드 ${s.round}/${TTEOK_ROUNDS}</p>
+    <p class="muted">떡먹은둥이찾기 · 라운드 ${s.round}/${TTEOK_ROUNDS}</p>
     <div id="scene" class="scene-wrap"></div>
     <p class="title" id="msg" style="font-size:22px"></p>
     <div class="tt-slots" style="grid-template-columns:repeat(${cfg.n},1fr)">${Array.from({ length: cfg.n }, (_, i) => `<button class="tt-slot" data-s="${i}" disabled>${i + 1}</button>`).join("")}</div>

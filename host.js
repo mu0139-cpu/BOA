@@ -325,11 +325,11 @@ function moleView(s) {
   };
 }
 
-// ---------- 화면: 떡먹는 용만이 ----------
+// ---------- 화면: 떡먹은둥이찾기 ----------
 function tteokHostView(s) {
   const cfg = tteokRoundCfg(s.seed, s.round);
   stage.innerHTML = `<div style="display:flex;justify-content:space-between;align-items:flex-end;margin-bottom:8px">
-      <p class="h-title">떡먹는 용만이 <span class="gold" style="font-size:36px">ROUND ${s.round} / ${TTEOK_ROUNDS}</span></p>
+      <p class="h-title">떡먹은둥이찾기 <span class="gold" style="font-size:36px">ROUND ${s.round} / ${TTEOK_ROUNDS}</span></p>
       <p class="clock" id="clk" style="font-size:90px"></p></div>
     <p class="h-sub" id="sub" style="font-size:32px"></p>
     <div id="scene" style="display:flex;justify-content:center;margin-top:28px"></div>`;
