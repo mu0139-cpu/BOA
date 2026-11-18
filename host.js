@@ -364,7 +364,7 @@ function tteokRevealView(s) {
   stage.innerHTML = `<div class="center">
       <p class="serif gold" style="font-size:28px">ROUND ${s.round} 결과</p>
       <p class="h-title">정답은 ${cfg.answer + 1}번 자리!</p>
-      <div style="width:100%;max-width:820px">${tteokSceneHtml(cfg, cfg.total, { mark: cfg.answer })}</div>
+      <div style="width:100%;max-width:960px;display:flex;justify-content:center">${tteokSceneHtml(cfg, cfg.total, { mark: cfg.answer })}</div>
       <p class="h-sub" style="font-size:32px">정답 ${ok.length} / ${plist().length}명</p>
       <div class="chips" style="justify-content:center;max-width:1100px">${ok.map((p) => `<span class="chip gold">${esc(p.name)}</span>`).join("")}</div></div>`;
   const btns = [];
