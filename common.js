@@ -88,18 +88,37 @@ export function tteokFrame(cfg, ms) {
 }
 
 // 무대 HTML (떡 떨어짐 → 둥이 먹기 → 자리 바꾸기). opts.mark = 정답 칸 표시
+// 그림 파일(assets/)이 있으면 그림을, 없으면 SVG를 보여준다
+export const TTEOK_ART = {
+  dungi: "assets/dungi.png",        // 기본
+  eat: "assets/dungi-eat.png",      // 떡 먹는 모습
+  move: "assets/dungi-move.png",    // 자리 옮기는 모습
+  tteok: "assets/tteok.png"
+};
+// 그림이 없으면 기본 그림, 그것도 없으면 SVG로 보여준다
+export function dungiArt(src, svgMood) {
+  const onerr = "if(this.src.indexOf('dungi.png')<0){this.src='assets/dungi.png'}else{this.parentNode.classList.add('fb')}";
+  return `<div class="art-wrap"><img class="art" src="${src}" alt="" onerror="${onerr}"><div class="fb-svg">${dungiSvg(svgMood)}</div></div>`;
+}
+
 export function tteokSceneHtml(cfg, ms, opts = {}) {
   const slotOf = tteokFrame(cfg, ms);
   const left = (x) => ((x + 0.5) / cfg.n) * 100;
   const dungi = slotOf.map((x, d) => {
     const eating = d === cfg.eater && ms >= cfg.dropEnd && ms < cfg.dropEnd + 700;
-    return `<div class="dsc" style="left:${left(x)}%">${dungiSvg(eating ? "wow" : "happy")}</div>`;
+    const moving = Math.abs(x - Math.round(x)) > 0.001;   // 칸 사이를 이동 중
+    const src = eating ? TTEOK_ART.eat : moving ? TTEOK_ART.move : TTEOK_ART.dungi;
+    return `<div class="dsc${eating ? " eat" : ""}" style="left:${left(x)}%">${dungiArt(src, eating ? "wow" : "happy")}</div>`;
   }).join("");
   const cake = ms < cfg.dropEnd
-    ? `<div class="cake" style="left:${left(cfg.eater)}%;top:${-14 + (ms / cfg.dropEnd) * 50}%"></div>`
+    ? `<div class="cake" style="left:${left(cfg.eater)}%;top:${-14 + (ms / cfg.dropEnd) * 34}%"><img class="art" src="${TTEOK_ART.tteok}" alt="" onerror="this.parentNode.classList.add('fb')"></div>`
+    : "";
+  // 자리 바뀐 뒤 답 고를 때 각 자리 아래에 번호 표시
+  const nums = ms >= cfg.ansAt
+    ? Array.from({ length: cfg.n }, (_, i) => `<div class="num" style="left:${left(i)}%">${i + 1}</div>`).join("")
     : "";
   const mark = opts.mark != null ? `<div class="mark" style="left:${left(opts.mark)}%">정답</div>` : "";
-  return `<div class="scene">${dungi}${cake}${mark}</div>`;
+  return `<div class="scene">${dungi}${cake}${nums}${mark}</div>`;
 }
 
 // ---- 둥이 (비숑) 그림 · mood: happy | wow | sad ----

@@ -43,9 +43,20 @@ input { font: inherit; }
 .scene { position: relative; width: min(92vw, 620px); aspect-ratio: 2.2 / 1; }
 .scene-wrap { width: min(92vw, 420px); }
 .scene-wrap .scene { width: 100%; }
-.dsc { position: absolute; bottom: 0; width: 19%; aspect-ratio: 1; transform: translateX(-50%); }
+.dsc { position: absolute; bottom: 14%; width: 19%; aspect-ratio: 1; transform: translateX(-50%); }
 .dsc svg { width: 100%; height: 100%; display: block; }
-.cake { position: absolute; width: 12%; aspect-ratio: 1; border-radius: 50%; background: #F7A8C4; border: 3px solid #fff; transform: translateX(-50%); box-shadow: 0 3px 8px rgba(0,0,0,.35); }
+.art-wrap { position: relative; width: 100%; height: 100%; }
+.art-wrap .art { width: 100%; height: 100%; object-fit: contain; display: block; }
+.art-wrap .fb-svg { display: none; width: 100%; height: 100%; }
+.art-wrap.fb .art { display: none; }
+.art-wrap.fb .fb-svg { display: block; }
+.dsc.eat .art-wrap { animation: chomp .7s ease-in-out; }
+@keyframes chomp { 0%,100% { transform: scale(1) translateY(0); } 40% { transform: scale(1.12) translateY(-6%); } 70% { transform: scale(.96) translateY(2%); } }
+.cake { position: absolute; width: 12%; aspect-ratio: 1; transform: translateX(-50%); }
+.cake .art { width: 100%; height: 100%; object-fit: contain; display: block; }
+.cake.fb { background: #F7A8C4; border: 3px solid #fff; border-radius: 50%; box-shadow: 0 3px 8px rgba(0,0,0,.35); }
+.cake.fb .art { display: none; }
+.num { position: absolute; bottom: 0; transform: translateX(-50%); font-size: clamp(18px, 4vw, 28px); font-weight: 900; color: var(--gold); }
 .mark { position: absolute; top: 0; transform: translateX(-50%); font-weight: 900; color: #1C1029; background: var(--good); padding: 4px 12px; border-radius: 999px; font-size: 16px; white-space: nowrap; }
 .tt-slots { display: grid; gap: 12px; width: min(92vw, 520px); }
 .tt-slot { aspect-ratio: 1; border-radius: 16px; background: var(--panel); border: 2px solid var(--line); font-size: 28px; font-weight: 900; color: var(--text); }
