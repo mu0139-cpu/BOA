@@ -1,8 +1,9 @@
 import {
   CONFIGURED, ROOM, rref, onValue, set, update, get, remove, now,
   GAMES, GAME_ORDER, TEAM, HANDS, HAND_ICON, moleLegend, beats, rankEntries, REACT_ROUNDS, REACT_PENALTY, esc, setupWarning,
-  DEFAULT_TITLE, dungiSvg, TTEOK_ROUNDS, tteokRoundCfg, tteokSceneHtml, tteokFrame
+  DEFAULT_TITLE, dungiSvg, TTEOK_ROUNDS, tteokRoundCfg, tteokSceneHtml, tteokFrame, dungiArt, TTEOK_ART
 } from "./common.js";
+import { play, setBgm, toggleSfx, toggleBgm, isSfxOn, isBgmOn } from "./sound.js";
 
 const $ = (q) => document.querySelector(q);
 const stage = $("#stage"), controls = $("#controls"), meta = $("#meta");
@@ -61,9 +62,73 @@ function draw() {
   meta.textContent = `방 코드 ${ROOM} · 참가자 ${plist().length}명`;
   $("#logo").textContent = D.title || DEFAULT_TITLE;
   const k = keyOf(s);
-  if (k !== curKey) { curKey = k; view = build(s); }
+  if (k !== curKey) { const first = !curKey; curKey = k; view = build(s); soundFor(s, first); }
   view?.update?.();
+  renderGameList();
 }
+
+// ---------- 소리: 화면이 바뀔 때 ----------
+function soundFor(s, first) {
+  const p = s.phase;
+  if (p === "play") setBgm(s.game === "react" ? null : "game");   // 번개 터치는 긴장감 있게 조용히
+  else setBgm("calm");
+  if (first) return;                                // 처음 열었을 때는 효과음 생략
+  if (p === "intro") play("ask");
+  else if (p === "reveal") play("reveal");
+  else if (p === "result") play("fanfare");
+  else if (p === "final") play("drumroll", 1.6);
+}
+
+// 카운트다운 삐-삐-삐-시작, 끝 버저
+let cdMark = "";
+function countdownSound(s, t) {
+  if (s.phase !== "play" || !s.startAt) return;
+  const k = keyOf(s);
+  const left = Math.ceil((s.startAt - t) / 1000);
+  if (left >= 1 && left <= 3 && cdMark !== `${k}|${left}`) { cdMark = `${k}|${left}`; play("beep"); }
+  if (t >= s.startAt && t < s.startAt + 600 && cdMark !== `${k}|go`) { cdMark = `${k}|go`; play("go"); }
+  const timed = ["tap", "mole", "minority", "rps"].includes(s.game);
+  if (timed && s.endAt && t >= s.endAt && t < s.endAt + 800 && cdMark !== `${k}|end`) { cdMark = `${k}|end`; play("end"); }
+}
+
+// ---------- 오른쪽 게임 목록 ----------
+let glKey = "";
+function renderGameList() {
+  const s = D.state;
+  const cur = ["intro", "play", "wait", "reveal", "result"].includes(s.phase) ? s.game : null;
+  const doneG = GAME_ORDER.filter((g) => D.gameResults?.[g]);
+  const key = [s.phase, cur, doneG.join(",")].join("|");
+  if (key === glKey) return;
+  glKey = key;
+  const item = (g) => {
+    const now_ = g === cur, fin = !now_ && doneG.includes(g);
+    const tag = now_ ? (s.phase === "result" ? "결과" : s.phase === "intro" ? "준비" : "진행 중") : fin ? "완료 ✓" : "";
+    return `<button class="gl-item${now_ ? " now" : ""}${fin ? " done" : ""}" data-g="${g}">
+      <span class="gl-no">${gameNo(g)}</span><span>${esc(GAMES[g].name)}</span><span class="gl-tag">${tag}</span></button>`;
+  };
+  $("#glist").innerHTML = `<p class="gl-head serif">GAME LIST</p>${GAME_ORDER.map(item).join("")}
+    <div class="gl-sep"></div>
+    <button class="gl-item extra${s.phase === "lobby" ? " now" : ""}" data-x="lobby"><span class="gl-no">📱</span><span>로비 · QR</span><span class="gl-tag"></span></button>
+    <button class="gl-item extra${s.phase === "final" ? " now" : ""}" data-x="final"><span class="gl-no">🏆</span><span>종합 결과</span><span class="gl-tag"></span></button>`;
+}
+$("#glist").addEventListener("click", (e) => {
+  const b = e.target.closest(".gl-item");
+  if (!b) return;
+  const busy = ["play", "wait", "reveal"].includes(D.state.phase);
+  if (busy && !confirm("진행 중인 게임을 멈추고 이동할까요?")) return;
+  if (b.dataset.g) setState({ phase: "intro", game: b.dataset.g });
+  else if (b.dataset.x === "lobby") setState({ phase: "lobby" });
+  else if (b.dataset.x === "final") showFinal();
+});
+
+// ---------- 소리 켜기/끄기 버튼 ----------
+const paintSnd = () => {
+  $("#bgm-btn").classList.toggle("off", !isBgmOn()); $("#bgm-btn").textContent = "🎵";
+  $("#sfx-btn").classList.toggle("off", !isSfxOn()); $("#sfx-btn").textContent = isSfxOn() ? "🔊" : "🔇";
+};
+$("#bgm-btn").addEventListener("click", () => { toggleBgm(); paintSnd(); });
+$("#sfx-btn").addEventListener("click", () => { toggleSfx(); paintSnd(); });
+paintSnd();
 
 function build(s) {
   if (s.phase === "lobby") return lobbyView();
@@ -221,6 +286,7 @@ async function showFinal() {
 setInterval(() => {
   const s = D.state, t = now(), k = keyOf(s);
   view?.tick?.();
+  countdownSound(s, t);
   if (done.has(k)) return;
   if (s.phase === "play" && t > s.endAt + 1200) {
     done.add(k);
@@ -254,10 +320,10 @@ function lobbyView() {
       </div>
     </div>`;
   new QRCode($("#qr"), { text: url, width: 280, height: 280, colorDark: "#1C1029", colorLight: "#ffffff" });
-  const btns = [{ label: `게임 시작 · ${GAMES[GAME_ORDER[0]].name}`, on: () => setState({ phase: "intro", game: GAME_ORDER[0] }) }];
-  GAME_ORDER.slice(1).forEach((g) => btns.push({ label: `${gameNo(g)}. ${GAMES[g].name}`, cls: "ghost", on: () => setState({ phase: "intro", game: g }) }));
-  btns.push({ label: "종합 결과", cls: "ghost", on: showFinal });
-  setControls("", btns.reverse());
+  const firstG = GAME_ORDER.find((g) => !D.gameResults?.[g]) || GAME_ORDER[0];
+  setControls("오른쪽 목록에서 원하는 게임을 바로 고를 수도 있어요", [
+    { label: `게임 시작 · ${GAMES[firstG].name}`, on: () => setState({ phase: "intro", game: firstG }) }
+  ]);
   return {
     update() {
       const ps = plist();
@@ -281,7 +347,7 @@ function introView(s) {
         <textarea id="qs">${esc(D.minority?.text || DEFAULT_QUESTIONS)}</textarea></div>` : ""}
       ${s.game === "rps" ? `<p class="muted" style="font-size:22px">4명 이상일 땐 비겨도 생존, 3명 이하부터는 이긴 사람만 생존</p>` : ""}
       ${s.game === "mole" ? moleLegend(150, 26) : ""}
-      ${s.game === "tteok" ? `<div style="width:220px;height:220px">${dungiSvg("happy")}</div>` : ""}
+      ${s.game === "tteok" ? `<div style="width:240px;height:240px">${dungiArt(TTEOK_ART.dungi, "happy")}</div>` : ""}
     </div>`;
   setControls("모두의 폰에 규칙이 표시되고 있어요", [
     { label: "로비로", cls: "ghost", on: () => setState({ phase: "lobby" }) },
@@ -334,10 +400,16 @@ function tteokHostView(s) {
     <p class="h-sub" id="sub" style="font-size:32px"></p>
     <div id="scene" style="display:flex;justify-content:center;margin-top:28px"></div>`;
   setControls("TV 화면을 보며 폰으로 답을 고르세요", [{ label: "중단하고 로비로", cls: "ghost", on: () => setState({ phase: "lobby" }) }]);
+  const fired = new Set();
+  const once = (k, name) => { if (!fired.has(k)) { fired.add(k); play(name); } };
   const loop = () => {
     const el = document.querySelector("#scene");
-    if (!el) return;                          // 다른 화면으로 바뀌면 멈춤
+    if (!el || keyOf(D.state) !== keyOf(s)) return;   // 다른 화면으로 바뀌면 멈춤
     const t = now(), ms = t - s.startAt;
+    if (ms >= 0 && ms < cfg.dropEnd) once("drop", "drop");
+    if (ms >= cfg.dropEnd && ms < cfg.dropEnd + 600) once("chomp", "chomp");
+    cfg.swaps.forEach((_, i) => { const t0 = cfg.shuffleStart + i * cfg.shufDur; if (ms >= t0 && ms < t0 + cfg.shufDur) once("sw" + i, "whoosh"); });
+    if (ms >= cfg.ansAt && ms < cfg.ansAt + 600) once("ask", "ask");
     let phase = "", clk = "";
     if (ms < 0) { phase = "곧 시작!"; clk = String(Math.ceil(-ms / 1000)); }
     else if (ms < cfg.ansAt) { phase = ms < cfg.dropEnd ? "둥이가 떡을 먹어요!" : "둥이들이 자리를 바꿔요! 잘 보세요"; }
@@ -472,11 +544,12 @@ function rpsRevealView(s) {
 }
 
 // ---------- 화면: 게임 결과 ----------
-function podium(list, valKey) {
+function podium(list, valKey, opt = {}) {
   const top = [list.find((e) => e.rank === 2) || list[1], list[0], list.find((e) => e.rank === 3) || list[2]];
-  const h = [150, 210, 110];
-  return `<div class="podium">${top.map((e, i) => e ? `<div class="pod"><p class="nm" style="color:var(--text)">${esc(e.name)}</p>
-    <p class="muted" style="margin-bottom:8px">${esc(valKey(e))}</p><div class="blk" style="height:${h[i]}px">${e.rank}</div></div>` : "").join("")}</div>`;
+  const h = opt.heights || [150, 210, 110];
+  const medal = opt.medal ? ["🥈", "🥇", "🥉"] : null;
+  return `<div class="podium${opt.medal ? " medal" : ""}">${top.map((e, i) => e ? `<div class="pod"><p class="nm" style="color:var(--text)">${medal ? `<span style="font-size:40px">${medal[i]}</span><br>` : ""}${esc(e.name)}</p>
+    <p class="muted" style="margin-bottom:8px">${esc(valKey(e))}</p><div class="blk" style="height:${h[i]}px">${e.rank}위</div></div>` : "").join("")}</div>`;
 }
 
 function resultView(s) {
@@ -494,13 +567,31 @@ function resultView(s) {
 }
 
 // ---------- 화면: 종합 결과 ----------
+const GAME_COLORS = { tap: "#D9B872", mole: "#B98A5E", react: "#8B5CC9", minority: "#5FB3A1", rps: "#6E9BE0", tteok: "#E07FA8" };
 function finalView() {
   const list = D.final || [];
   const champ = list.filter((e) => e.rank === 1).map((e) => e.name).join(", ");
-  stage.innerHTML = `<p class="serif gold" style="font-size:32px;text-align:center">FINAL</p>
-    <p class="h-title" style="text-align:center;margin-bottom:16px">${champ ? `우승 ${esc(champ)}!` : "최종 순위"}</p>
-    ${podium(list, (e) => `${e.total}점`)}
-    <div class="rows">${list.slice(3).map((e) => `<div class="row"><span class="rk">${e.rank}</span><span class="nm">${esc(e.name)}</span><span></span><span class="val">${e.total}점</span></div>`).join("")}</div>`;
+  const played = GAME_ORDER.filter((g) => list.some((e) => D.scores?.[e.pid]?.[g] != null));
+  const max = Math.max(1, ...list.map((e) => e.total));
+  const bars = list.map((e) => {
+    const segs = played.map((g) => {
+      const v = D.scores?.[e.pid]?.[g] || 0;
+      return v ? `<i data-w="${(v / max) * 100}" style="background:${GAME_COLORS[g]}" title="${esc(GAMES[g].name)} ${v}점"></i>` : "";
+    }).join("");
+    return `<div class="bar-row"><span class="rk">${e.rank}</span><span class="nm">${esc(e.name)}</span><div class="bar-track">${segs}</div><span class="val">${e.total}</span></div>`;
+  }).join("");
+  stage.innerHTML = `<p class="serif gold" style="font-size:30px;text-align:center">FINAL</p>
+    <p class="h-title" style="text-align:center;margin-bottom:8px">${champ ? `우승 ${esc(champ)}!` : "최종 순위"}</p>
+    <div class="final-wrap">
+      <div>${podium(list, (e) => `${e.total}점`, { medal: true, heights: [170, 230, 130] })}</div>
+      <div>
+        <p class="h-sub" style="margin-bottom:12px">전체 점수</p>
+        <div class="bars">${bars || `<p class="muted">아직 점수가 없어요</p>`}</div>
+        ${played.length ? `<div class="bar-legend">${played.map((g) => `<span><i style="background:${GAME_COLORS[g]}"></i>${esc(GAMES[g].name)}</span>`).join("")}</div>` : ""}
+      </div>
+    </div>`;
+  setTimeout(() => stage.querySelectorAll(".bar-track > i").forEach((el, i) => { el.style.transitionDelay = `${1.4 + i * 0.03}s`; el.style.width = el.dataset.w + "%"; }), 50);
+  setTimeout(() => { if (D.state.phase === "final") play("fanfare"); }, 1650);
   setControls("Cheers to 2026!", [{ label: "로비로", cls: "ghost", on: () => setState({ phase: "lobby" }) }]);
   return {};
 }

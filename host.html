@@ -8,7 +8,39 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 <style>
   body { overflow: hidden; }
-  #wrap { height: 100vh; display: grid; grid-template-rows: auto 1fr auto; }
+  #wrap { height: 100vh; display: grid; grid-template-rows: auto 1fr auto; grid-template-columns: minmax(0, 1fr) 300px; }
+  #wrap > header, #wrap > footer { grid-column: 1 / -1; }
+  #wrap > main { grid-column: 1; grid-row: 2; min-height: 0; }
+  #glist { grid-column: 2; grid-row: 2;min-height: 0; overflow: auto; border-left: 1px solid var(--line); background: rgba(42, 26, 61, .55); padding: 20px 16px; display: flex; flex-direction: column; gap: 8px; }
+  #glist .gl-head { font-size: 14px; letter-spacing: .2em; color: var(--gold); margin: 0 6px 6px; }
+  #glist .gl-item { display: grid; grid-template-columns: 34px 1fr auto; align-items: center; gap: 10px; width: 100%; text-align: left; padding: 12px 12px; border-radius: 12px; background: transparent; border: 1.5px solid transparent; color: var(--text); font-size: 19px; font-weight: 700; }
+  #glist .gl-item:hover { background: var(--panel-2); }
+  #glist .gl-no { font-family: "Cormorant Garamond", serif; font-size: 24px; color: var(--gold); text-align: center; }
+  #glist .gl-tag { font-size: 13px; font-weight: 700; padding: 3px 8px; border-radius: 999px; white-space: nowrap; }
+  #glist .gl-item.now { border-color: var(--gold); background: rgba(217, 184, 114, .16); }
+  #glist .gl-item.now .gl-tag { background: var(--gold); color: #1C1029; }
+  #glist .gl-item.done { color: var(--muted); }
+  #glist .gl-item.done .gl-tag { color: var(--good); border: 1px solid var(--good); }
+  #glist .gl-tag:empty { display: none; }
+  #glist .gl-sep { height: 1px; background: var(--line); margin: 8px 6px; }
+  #glist .gl-item.extra .gl-no { font-family: inherit; font-size: 20px; }
+  header .snd { min-width: 52px; padding: 10px 14px; font-size: 20px; }
+  header .snd.off { opacity: .45; }
+  .final-wrap { display: grid; grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr); gap: 40px; align-items: center; flex: 1; }
+  .bars { display: flex; flex-direction: column; gap: 10px; }
+  .bar-row { display: grid; grid-template-columns: 44px 130px 1fr 70px; align-items: center; gap: 12px; font-size: 20px; }
+  .bar-row .rk { font-weight: 900; color: var(--gold); text-align: right; }
+  .bar-row .nm { font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .bar-row .val { font-weight: 900; text-align: right; font-variant-numeric: tabular-nums; }
+  .bar-track { height: 26px; border-radius: 8px; background: var(--panel); overflow: hidden; display: flex; }
+  .bar-track > i { display: block; height: 100%; width: 0; transition: width 1.2s cubic-bezier(.2,.8,.2,1); }
+  .bar-legend { display: flex; flex-wrap: wrap; gap: 8px 16px; margin-top: 14px; font-size: 15px; color: var(--muted); }
+  .bar-legend span { display: inline-flex; align-items: center; gap: 6px; }
+  .bar-legend i { width: 14px; height: 14px; border-radius: 4px; display: inline-block; }
+  .podium.medal .pod .blk { font-size: 44px; }
+  .podium.medal .pod:nth-child(2) .blk { background: linear-gradient(180deg, rgba(217,184,114,.55), rgba(217,184,114,.15)); color: #1C1029; }
+  .podium.medal .pod:nth-child(1) .blk { background: linear-gradient(180deg, rgba(199,199,214,.45), rgba(199,199,214,.1)); }
+  .podium.medal .pod:nth-child(3) .blk { background: linear-gradient(180deg, rgba(205,127,70,.5), rgba(205,127,70,.12)); }
   header { display: flex; align-items: center; gap: 24px; padding: 18px 32px; border-bottom: 1px solid var(--line); }
   header .logo { font-size: 30px; font-weight: 700; }
   header .meta { color: var(--muted); font-size: 18px; }
@@ -57,10 +89,13 @@
     <span class="logo serif gold" id="logo">BOA GAME NIGHT</span>
     <span class="meta" id="meta"></span>
     <span class="spacer"></span>
+    <button class="btn ghost snd" id="bgm-btn" title="배경음 켜기/끄기" aria-label="배경음 켜기/끄기">🎵</button>
+    <button class="btn ghost snd" id="sfx-btn" title="효과음 켜기/끄기" aria-label="효과음 켜기/끄기">🔊</button>
     <button class="btn ghost" id="edit-title">타이틀 변경</button>
     <button class="btn ghost" id="manage">참가자 관리</button>
   </header>
   <main id="stage"></main>
+  <nav id="glist" aria-label="게임 목록"></nav>
   <footer id="controls"></footer>
 </div>
 <dialog id="dlg">

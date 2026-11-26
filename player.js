@@ -1,8 +1,9 @@
 import {
   CONFIGURED, ROOM, rref, onValue, set, get, update, now, GAMES, TEAM, HANDS,
   moleSchedule, MOLE_POINTS, TAP_CAP_PER_SEC, REACT_PENALTY, esc, setupWarning, HAND_ICON, moleSvg, moleLegend,
-  DEFAULT_TITLE, dungiSvg, TTEOK_ROUNDS, tteokRoundCfg, tteokSceneHtml
+  DEFAULT_TITLE, dungiSvg, TTEOK_ROUNDS, tteokRoundCfg, tteokSceneHtml, dungiArt, TTEOK_ART
 } from "./common.js";
+import { play, toggleSfx, isSfxOn } from "./sound.js";
 
 const app = document.getElementById("app");
 if (!CONFIGURED) { app.innerHTML = setupWarning(); throw new Error("not configured"); }
@@ -35,11 +36,17 @@ function shell(inner) {
   app.innerHTML = `
     <div class="top">
       <span id="ttl" class="serif gold" style="font-size:18px;font-weight:700">${esc(TITLE)}</span>
-      <span>${me ? esc(me.name) : ""}</span>
+      <span style="display:flex;align-items:center;gap:10px">${me ? esc(me.name) : ""}<button id="snd" class="snd-btn" aria-label="효과음 켜기/끄기">${isSfxOn() ? "🔊" : "🔇"}</button></span>
     </div>
     <div class="stage">${inner}</div>`;
   return app.querySelector(".stage");
 }
+
+// 효과음 켜기/끄기 (화면이 자주 다시 그려져서 이벤트는 위임으로 받는다)
+app.addEventListener("click", (e) => {
+  const b = e.target.closest("#snd");
+  if (b) { const on = toggleSfx(); b.textContent = on ? "🔊" : "🔇"; if (on) play("click"); }
+});
 
 // ---------- 화면 꺼짐 방지 ----------
 let wake = null;
@@ -144,7 +151,7 @@ function lobby() {
 
 function intro(s) {
   const g = GAMES[s.game];
-  shell(`<p class="muted">곧 시작</p><p class="big" style="font-size:40px">${esc(g.name)}</p><p class="title" style="font-size:20px;line-height:1.6">${esc(g.rule)}</p>${s.game === "mole" ? moleLegend(82, 15) : ""}${s.game === "tteok" ? `<div class="dungi-preview">${dungiSvg("happy")}</div>` : ""}`);
+  shell(`<p class="muted">곧 시작</p><p class="big" style="font-size:40px">${esc(g.name)}</p><p class="title" style="font-size:20px;line-height:1.6">${esc(g.rule)}</p>${s.game === "mole" ? moleLegend(82, 15) : ""}${s.game === "tteok" ? `<div class="dungi-preview">${dungiArt(TTEOK_ART.dungi, "happy")}</div>` : ""}`);
 }
 
 // 공통: 카운트다운 문구
@@ -170,7 +177,7 @@ function tapGame(s) {
     if (done || t < s.startAt || t >= s.endAt) return;
     while (recent.length && recent[0] < t - 1000) recent.shift();
     if (recent.length >= TAP_CAP_PER_SEC) return;
-    recent.push(t); count++; cnt.textContent = count;
+    recent.push(t); count++; cnt.textContent = count; play("tap");
     if (navigator.vibrate) navigator.vibrate(8);
   });
   const iv = setInterval(() => { if (count !== sent && !done) { sent = count; set(rref(`live/tap/${pid}`), count); } }, 250);
@@ -209,6 +216,7 @@ function moleGame(s) {
     const a = active(Number(b.dataset.h), el);
     if (!a) return;
     hit.add(a.id); score += MOLE_POINTS[a.type]; sc.textContent = score;
+    play(a.type === "bomb" ? "bomb" : a.type === "gold" ? "gold" : "hit");
     b.classList.add("hit"); setTimeout(() => b.classList.remove("hit"), 120);
     if (navigator.vibrate) navigator.vibrate(a.type === "bomb" ? 80 : 10);
   }));
@@ -253,8 +261,9 @@ function reactGame(s) {
     if (done) return;
     const t = now();
     if (t < s.startAt) return;
-    if (!shownAt) return finish(REACT_PENALTY, "부정출발!");
+    if (!shownAt) { play("wrong"); return finish(REACT_PENALTY, "부정출발!"); }
     const ms = Math.round(performance.now() - shownAt);
+    play("correct");
     finish(ms, `${ms} ms`);
   });
   const loop = () => {
@@ -290,7 +299,7 @@ function minorityGame(s) {
   btns.forEach((b) => b.addEventListener("click", () => {
     const t = now();
     if (t < s.startAt || t >= s.endAt) return;
-    pick = b.dataset.c;
+    pick = b.dataset.c; play("click");
     btns.forEach((x) => x.classList.toggle("on", x === b));
     set(rref(`results/minority/q${s.q}/${pid}`), pick);
   }));
@@ -311,6 +320,7 @@ async function minorityReveal(s) {
   if (keyOf(state) !== keyOf(s)) return;
   const label = mine ? (mine === "a" ? s.a : s.b) : "선택 안 함";
   const won = mine && s.winner === mine;
+  play(won ? "correct" : "wrong");
   shell(`
     <p class="muted">문제 ${s.q + 1} 결과</p>
     <p class="title">${esc(s.a)} ${s.countA}명 · ${esc(s.b)} ${s.countB}명</p>
@@ -341,7 +351,7 @@ function rpsGame(s) {
   btns.forEach((b) => b.addEventListener("click", () => {
     const t = now();
     if (t < s.startAt || t >= s.endAt) return;
-    pick = b.dataset.h;
+    pick = b.dataset.h; play("click");
     btns.forEach((x) => x.classList.toggle("on", x === b));
     set(rref(`results/rps/r${s.round}/${pid}`), pick);
   }));
@@ -363,6 +373,7 @@ async function rpsReveal(s) {
   const alive = !!rpsAlive[pid];
   const wasIn = alive || rpsElim[pid] === s.round;
   if (!wasIn) { shell(`<p class="title">탈락</p><p class="muted">화면에서 생존자를 응원해 주세요!</p>`); return; }
+  play(alive ? "correct" : "wrong");
   shell(`
     <p class="muted">라운드 ${s.round} 결과</p>
     <p style="font-size:72px;line-height:1">${HAND_ICON[s.hostHand]}</p>
@@ -389,7 +400,7 @@ function tteokGame(s) {
     e.preventDefault();
     const ms = now() - s.startAt;
     if (picked !== null || ms < cfg.ansAt || ms >= cfg.total) return;
-    picked = Number(b.dataset.s);
+    picked = Number(b.dataset.s); play("click");
     slots.forEach((x) => x.classList.toggle("on", x === b));
     set(rref(`results/tteok/r${s.round}/${pid}`), { s: picked, t: Math.round(ms - cfg.ansAt) });
     if (navigator.vibrate) navigator.vibrate(10);
@@ -416,6 +427,7 @@ async function tteokReveal(s) {
   const mine = (await get(rref(`results/tteok/r${s.round}/${pid}`))).val();
   if (keyOf(state) !== keyOf(s)) return;
   const ok = !!mine && mine.s === cfg.answer;
+  play(ok ? "correct" : "wrong");
   shell(`
     <p class="muted">라운드 ${s.round} 결과</p>
     <p class="title">정답은 ${cfg.answer + 1}번 자리!</p>
