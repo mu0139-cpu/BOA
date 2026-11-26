@@ -1,7 +1,8 @@
 import {
   CONFIGURED, ROOM, rref, onValue, set, get, update, now, GAMES, TEAM, HANDS,
   moleSchedule, MOLE_POINTS, TAP_CAP_PER_SEC, REACT_PENALTY, esc, setupWarning, HAND_ICON, moleSvg, moleLegend,
-  DEFAULT_TITLE, dungiSvg, TTEOK_ROUNDS, tteokRoundCfg, tteokSceneHtml, dungiArt, TTEOK_ART
+  DEFAULT_TITLE, dungiSvg, TTEOK_ROUNDS, tteokRoundCfg, tteokSceneHtml, dungiArt, TTEOK_ART,
+  STOP_TARGETS, STOP_SHOW_MS, fmtSec, SHAKE_CAP_PER_SEC
 } from "./common.js";
 import { play, toggleSfx, isSfxOn } from "./sound.js";
 
@@ -128,7 +129,10 @@ function render(force) {
     if (s.game === "minority") return startCtrl(minorityGame, s);
     if (s.game === "rps") return startCtrl(rpsGame, s);
     if (s.game === "tteok") return startCtrl(tteokGame, s);
+    if (s.game === "stop") return startCtrl(stopGame, s);
+    if (s.game === "shake") return startCtrl(shakeGame, s);
   }
+  if (s.phase === "reveal" && s.game === "stop") return stopReveal(s);
   if (s.phase === "reveal" && s.game === "minority") return minorityReveal(s);
   if (s.phase === "reveal" && s.game === "rps") return rpsReveal(s);
   if (s.phase === "reveal" && s.game === "tteok") return tteokReveal(s);
@@ -151,7 +155,30 @@ function lobby() {
 
 function intro(s) {
   const g = GAMES[s.game];
-  shell(`<p class="muted">곧 시작</p><p class="big" style="font-size:40px">${esc(g.name)}</p><p class="title" style="font-size:20px;line-height:1.6">${esc(g.rule)}</p>${s.game === "mole" ? moleLegend(82, 15) : ""}${s.game === "tteok" ? `<div class="dungi-preview">${dungiArt(TTEOK_ART.dungi, "happy")}</div>` : ""}`);
+  const st = shell(`<p class="muted">곧 시작</p><p class="big" style="font-size:40px">${esc(g.name)}</p><p class="title" style="font-size:20px;line-height:1.6">${esc(g.rule)}</p>${s.game === "mole" ? moleLegend(82, 15) : ""}${s.game === "tteok" ? `<div class="dungi-preview">${dungiArt(TTEOK_ART.dungi, "happy")}</div>` : ""}${s.game === "stop" ? `<p class="muted">목표: ${STOP_TARGETS.map((t) => t + "초").join(" → ")}</p>` : ""}${s.game === "shake" ? shakeReadyHtml() : ""}`);
+  if (s.game === "shake") bindShakeReady(st);
+}
+
+// ---------- 흔들기 센서 준비 (아이폰은 버튼을 눌러 허용해야 함) ----------
+let motionState = "unknown";   // unknown | granted | denied | none
+const needsMotionPermission = () => typeof DeviceMotionEvent !== "undefined" && typeof DeviceMotionEvent.requestPermission === "function";
+function shakeReadyHtml() {
+  if (typeof DeviceMotionEvent === "undefined") { motionState = "none"; return `<p class="muted">이 폰은 흔들기 센서가 없어서 화면 연타로 참여해요</p>`; }
+  if (!needsMotionPermission()) { motionState = "granted"; return `<p class="title" style="font-size:22px;color:var(--good)">📳 준비 완료! 시작하면 흔드세요</p>`; }
+  if (motionState === "granted") return `<p class="title" style="font-size:22px;color:var(--good)">📳 센서 허용 완료!</p>`;
+  return `<button class="btn" id="motion-ok" style="width:100%;max-width:360px;font-size:20px">📳 흔들기 준비하기 (센서 허용)</button><p class="muted" id="motion-msg" style="font-size:14px">아이폰은 이 버튼을 눌러 ‘동작 및 방향’ 접근을 허용해 주세요</p>`;
+}
+function bindShakeReady(st) {
+  const b = st.querySelector("#motion-ok");
+  if (!b) return;
+  b.addEventListener("click", async () => {
+    try {
+      const r = await DeviceMotionEvent.requestPermission();
+      motionState = r === "granted" ? "granted" : "denied";
+    } catch (e) { motionState = "denied"; }
+    if (motionState === "granted") { play("correct"); b.outerHTML = `<p class="title" style="font-size:22px;color:var(--good)">📳 센서 허용 완료!</p>`; st.querySelector("#motion-msg")?.remove(); }
+    else { play("wrong"); st.querySelector("#motion-msg").textContent = "허용되지 않았어요. 게임 중에는 화면을 연타해서 참여할 수 있어요."; }
+  });
 }
 
 // 공통: 카운트다운 문구
@@ -381,6 +408,110 @@ async function rpsReveal(s) {
     <p class="muted">나: ${mine ? HAND_ICON[mine] + " " + HANDS[mine] : "선택 안 함"}</p>
     <p class="big" style="color:${alive ? "var(--good)" : "var(--bad)"}">${alive ? "생존!" : "탈락"}</p>
     <p class="muted">${s.revived ? "모두 탈락해서 전원 부활!" : `남은 인원 ${Object.keys(rpsAlive).length}명`}</p>`);
+}
+
+// ---------- 게임 7 : 정지! 타이머 ----------
+function stopGame(s) {
+  if (late(s)) { shell(`<p class="title">이번 라운드는 지나갔어요</p><p class="muted">다음 라운드를 기다려 주세요.</p>`); return; }
+  const st = shell(`
+    <p class="muted">정지! 타이머 · 라운드 ${s.round}/${STOP_TARGETS.length}</p>
+    <p class="title">목표 <span class="gold">${s.target}.00</span>초</p>
+    <p class="big" id="clk" style="font-size:64px;font-variant-numeric:tabular-nums">0.00</p>
+    <button class="tap-btn" id="stop" style="background:var(--bad);color:#fff;font-size:44px" disabled>STOP</button>
+    <p class="muted" id="info"></p>`);
+  const clk = st.querySelector("#clk"), btn = st.querySelector("#stop"), info = st.querySelector("#info");
+  let done = false, raf = 0;
+  btn.addEventListener("pointerdown", (e) => {
+    e.preventDefault();
+    const t = now();
+    if (done || t < s.startAt || t >= s.endAt) return;
+    done = true;
+    const ms = Math.round(t - s.startAt);
+    set(rref(`results/stop/r${s.round}/${pid}`), ms);
+    play("click"); if (navigator.vibrate) navigator.vibrate(30);
+    btn.disabled = true; btn.textContent = "완료";
+    clk.textContent = fmtSec(ms); clk.style.color = "var(--gold)";
+    info.textContent = `${fmtSec(ms)}초에 멈췄어요! 결과는 화면에서`;
+  });
+  const loop = () => {
+    const t = now(), ms = t - s.startAt;
+    if (!done) {
+      if (ms < 0) { clk.textContent = String(Math.ceil(-ms / 1000)); info.textContent = "곧 시작!"; }
+      else if (t < s.endAt) {
+        btn.disabled = false;
+        clk.textContent = ms < STOP_SHOW_MS ? fmtSec(ms) : "??.??";
+        info.textContent = ms < STOP_SHOW_MS ? "곧 숫자가 사라져요" : "마음속으로 세다가 목표 시간에 STOP!";
+      } else { done = true; btn.disabled = true; clk.textContent = "시간 초과"; info.textContent = "이번 라운드는 못 멈췄어요"; play("wrong"); }
+    }
+    raf = requestAnimationFrame(loop);
+  };
+  loop();
+  return { stop() { cancelAnimationFrame(raf); } };
+}
+
+async function stopReveal(s) {
+  const mine = (await get(rref(`results/stop/r${s.round}/${pid}`))).val();
+  if (keyOf(state) !== keyOf(s)) return;
+  const err = mine == null ? null : mine - s.target * 1000;
+  const good = err != null && Math.abs(err) < 500;
+  play(good ? "correct" : "wrong");
+  shell(`
+    <p class="muted">라운드 ${s.round} 결과 · 목표 ${s.target}.00초</p>
+    <p class="big" style="font-size:56px">${mine == null ? "못 멈춤" : fmtSec(mine) + "초"}</p>
+    <p class="title" style="color:${good ? "var(--good)" : "var(--muted)"}">${err == null ? "오차 5초로 계산돼요" : `오차 ${err >= 0 ? "+" : "−"}${fmtSec(Math.abs(err))}초`}</p>
+    <p class="muted">순위는 노트북 화면에서 확인하세요</p>`);
+}
+
+// ---------- 게임 8 : 폰 흔들기 레이스 ----------
+function shakeGame(s) {
+  if (late(s)) { shell(`<p class="title">이번 게임은 이미 진행 중이에요</p><p class="muted">다음 게임부터 참여해요.</p>`); return; }
+  const st = shell(`
+    <p class="muted" id="info">준비</p>
+    <p style="font-size:84px;line-height:1" id="horse">🏇</p>
+    <p class="big" id="cnt">0</p>
+    <p class="title" id="msg" style="font-size:20px">폰을 꼭 쥐고 흔들 준비!</p>
+    <button class="tap-btn" id="tapalt" style="background:var(--panel-2);color:var(--text);font-size:22px;display:none">센서가 안 되면<br>여기를 연타!</button>`);
+  const info = st.querySelector("#info"), cnt = st.querySelector("#cnt"), msg = st.querySelector("#msg"), alt = st.querySelector("#tapalt"), horse = st.querySelector("#horse");
+  let count = 0, sent = -1, done = false, raf = 0, lastShake = 0, gotMotion = false, lastMag = 9.8;
+  const recent = [];
+  const add = () => {
+    const t = now();
+    if (done || t < s.startAt || t >= s.endAt) return;
+    while (recent.length && recent[0] < t - 1000) recent.shift();
+    if (recent.length >= SHAKE_CAP_PER_SEC) return;
+    recent.push(t); count++; cnt.textContent = count; play("tap");
+    horse.style.transform = `translateX(${count % 2 ? 6 : -6}px)`;
+  };
+  const onMotion = (e) => {
+    const a = e.accelerationIncludingGravity || e.acceleration;
+    if (!a || a.x == null) return;
+    gotMotion = true;
+    const mag = Math.sqrt(a.x * a.x + a.y * a.y + (a.z || 0) * (a.z || 0));
+    const t = performance.now();
+    // 세게 흔들 때만 1번으로 센다 (가속도 급변 + 0.12초 간격)
+    if (Math.abs(mag - lastMag) > 11 && t - lastShake > 120) { lastShake = t; add(); }
+    lastMag = mag;
+  };
+  window.addEventListener("devicemotion", onMotion);
+  alt.addEventListener("pointerdown", (e) => { e.preventDefault(); add(); });
+  const iv = setInterval(() => { if (count !== sent && !done) { sent = count; set(rref(`live/shake/${pid}`), count); } }, 300);
+  const loop = () => {
+    const t = now();
+    const cd = countdownText(s.startAt);
+    if (cd) info.textContent = `${cd}초 후 시작`;
+    else if (t < s.endAt) {
+      info.textContent = `남은 시간 ${Math.ceil((s.endAt - t) / 1000)}초`;
+      msg.textContent = "흔들어! 흔들어!";
+      // 시작 2초가 지나도 센서 신호가 없으면 연타 버튼을 보여 준다
+      if (!gotMotion && t - s.startAt > 2000) alt.style.display = "";
+    } else if (!done) {
+      done = true; info.textContent = "끝!"; msg.textContent = `${count}번 흔들었어요!`; alt.disabled = true;
+      set(rref(`live/shake/${pid}`), count); set(rref(`results/shake/${pid}`), count);
+    }
+    raf = requestAnimationFrame(loop);
+  };
+  loop();
+  return { stop() { cancelAnimationFrame(raf); clearInterval(iv); window.removeEventListener("devicemotion", onMotion); } };
 }
 
 // ---------- 게임 6 : 떡먹은둥이찾기 ----------

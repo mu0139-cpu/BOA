@@ -22,7 +22,7 @@ if (db) onValue(ref(db, ".info/serverTimeOffset"), (s) => { offset = s.val() || 
 export const now = () => Date.now() + offset;
 
 // ---- 게임 목록 ----
-export const GAME_ORDER = ["tap", "mole", "react", "minority", "rps", "tteok"];
+export const GAME_ORDER = ["tap", "mole", "react", "minority", "rps", "tteok", "stop", "shake"];
 export const DEFAULT_TITLE = "BOA GAME NIGHT";
 export const GAMES = {
   tap:      { name: "연타 달리기",   sec: 10, rule: "10초 동안 버튼을 최대한 많이 누르세요. 한 손가락만!" },
@@ -30,8 +30,20 @@ export const GAMES = {
   react:    { name: "번개 터치",      sec: 0,  rule: "화면이 금색으로 바뀌는 순간 터치! 먼저 누르면 부정출발 (3라운드 평균)" },
   minority: { name: "눈치 소수결",    sec: 10, rule: "둘 중 하나를 고르세요. 덜 고른 쪽이 1점!" },
   rps:      { name: "가위바위보 서바이벌", sec: 5, rule: "노트북과 가위바위보! 지거나 안 고르면 탈락" },
-  tteok:    { name: "떡먹은둥이찾기", sec: 0, rule: "떡을 먹은 둥이가 어디로 갔는지 맞히세요! 둥이는 점점 많아지고 더 빨리 섞여요" }
+  tteok:    { name: "떡먹은둥이찾기", sec: 0, rule: "떡을 먹은 둥이가 어디로 갔는지 맞히세요! 둥이는 점점 많아지고 더 빨리 섞여요" },
+  stop:     { name: "정지! 타이머", sec: 0, rule: "목표 시간에 딱 맞춰 STOP! 숫자는 3초 뒤에 사라져요 (3라운드 오차 합계가 적은 순)" },
+  shake:    { name: "폰 흔들기 레이스", sec: 15, rule: "15초 동안 폰을 꼭 쥐고 힘차게 흔들어 말을 달리게 하세요!" }
 };
+
+// ---- 정지! 타이머 ----
+export const STOP_TARGETS = [10, 7, 13];   // 라운드별 목표 초
+export const STOP_SHOW_MS = 3000;          // 숫자가 보이는 시간
+export const STOP_MISS = 5000;             // 못 누르면 오차 5초로 처리
+export const STOP_GRACE = 5000;            // 목표 뒤로 누를 수 있는 여유
+export const fmtSec = (ms) => (ms / 1000).toFixed(2);
+
+// ---- 폰 흔들기 레이스 ----
+export const SHAKE_CAP_PER_SEC = 8;        // 1초에 최대 8번만 인정
 
 // ---- 떡먹은둥이찾기 ----
 // 가운데 둥이가 떡을 먹고, 둥이들이 무작위로 자리를 바꾼 뒤 '떡 먹은 둥이'가 어디 있는지 맞힌다.

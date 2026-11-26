@@ -1,7 +1,8 @@
 import {
   CONFIGURED, ROOM, rref, onValue, set, update, get, remove, now,
   GAMES, GAME_ORDER, TEAM, HANDS, HAND_ICON, moleLegend, beats, rankEntries, REACT_ROUNDS, REACT_PENALTY, esc, setupWarning,
-  DEFAULT_TITLE, dungiSvg, TTEOK_ROUNDS, tteokRoundCfg, tteokSceneHtml, tteokFrame, dungiArt, TTEOK_ART
+  DEFAULT_TITLE, dungiSvg, TTEOK_ROUNDS, tteokRoundCfg, tteokSceneHtml, tteokFrame, dungiArt, TTEOK_ART,
+  STOP_TARGETS, STOP_SHOW_MS, STOP_MISS, STOP_GRACE, fmtSec
 } from "./common.js";
 import { play, setBgm, toggleSfx, toggleBgm, isSfxOn, isBgmOn } from "./sound.js";
 
@@ -87,7 +88,7 @@ function countdownSound(s, t) {
   const left = Math.ceil((s.startAt - t) / 1000);
   if (left >= 1 && left <= 3 && cdMark !== `${k}|${left}`) { cdMark = `${k}|${left}`; play("beep"); }
   if (t >= s.startAt && t < s.startAt + 600 && cdMark !== `${k}|go`) { cdMark = `${k}|go`; play("go"); }
-  const timed = ["tap", "mole", "minority", "rps"].includes(s.game);
+  const timed = ["tap", "mole", "minority", "rps", "shake"].includes(s.game);
   if (timed && s.endAt && t >= s.endAt && t < s.endAt + 800 && cdMark !== `${k}|end`) { cdMark = `${k}|end`; play("end"); }
 }
 
@@ -133,9 +134,9 @@ paintSnd();
 function build(s) {
   if (s.phase === "lobby") return lobbyView();
   if (s.phase === "intro") return introView(s);
-  if (s.phase === "play") return ({ tap: raceView, mole: moleView, react: reactPlayView, minority: minorityPlayView, rps: rpsPlayView, tteok: tteokHostView })[s.game](s);
+  if (s.phase === "play") return ({ tap: raceView, mole: moleView, react: reactPlayView, minority: minorityPlayView, rps: rpsPlayView, tteok: tteokHostView, stop: stopPlayView, shake: shakeView })[s.game](s);
   if (s.phase === "wait") return reactWaitView(s);
-  if (s.phase === "reveal") return s.game === "minority" ? minorityRevealView(s) : s.game === "tteok" ? tteokRevealView(s) : rpsRevealView(s);
+  if (s.phase === "reveal") return s.game === "minority" ? minorityRevealView(s) : s.game === "tteok" ? tteokRevealView(s) : s.game === "stop" ? stopRevealView(s) : rpsRevealView(s);
   if (s.phase === "result") return resultView(s);
   if (s.phase === "final") return finalView();
   return null;
@@ -149,7 +150,8 @@ async function startGame(g) {
     await update(rref(), { "results/tteok": null, "tteok/seed": seed });
     startTteokRound(1, seed);
   }
-  if (g === "tap" || g === "mole") {
+  if (g === "stop") { await update(rref(), { "results/stop": null, "stop/rounds": 0 }); startStopRound(1); }
+  if (g === "tap" || g === "mole" || g === "shake") {
     await update(rref(), {
       [`live/${g}`]: null, [`results/${g}`]: null,
       state: { phase: "play", game: g, startAt: t + 3500, endAt: t + 3500 + GAMES[g].sec * 1000, seed: Math.floor(Math.random() * 1e9) }
@@ -172,6 +174,12 @@ async function startGame(g) {
 function startReactRound(n) {
   const s = now() + 3000, go = s + 2000 + Math.floor(Math.random() * 3000);
   setState({ phase: "play", game: "react", round: n, startAt: s, goAt: go, endAt: go + 2500 });
+}
+
+function startStopRound(r) {
+  const target = STOP_TARGETS[r - 1];
+  const s = now() + 3500;
+  update(rref(), { "stop/rounds": r, state: { phase: "play", game: "stop", round: r, target, startAt: s, endAt: s + target * 1000 + STOP_GRACE } });
 }
 
 function startTteokRound(r, seed = D.tteok?.seed) {
@@ -232,10 +240,22 @@ function computeList(g) {
   const ps = plist();
   const R = D.results || {}, L = D.live || {};
   let entries, better, label;
-  if (g === "tap" || g === "mole") {
-    entries = ps.map((p) => ({ pid: p.pid, v: R[g]?.[p.pid] ?? L[g]?.[p.pid] ?? (g === "tap" ? 0 : -99) }));
+  if (g === "tap" || g === "mole" || g === "shake") {
+    entries = ps.map((p) => ({ pid: p.pid, v: R[g]?.[p.pid] ?? L[g]?.[p.pid] ?? (g === "mole" ? -99 : 0) }));
     better = (a, b) => b.v - a.v;
-    label = (v) => (g === "tap" ? `${v}회` : `${v === -99 ? 0 : v}점`);
+    label = (v) => (g === "tap" ? `${v}회` : g === "shake" ? `${v}번 흔듦` : `${v === -99 ? 0 : v}점`);
+  } else if (g === "stop") {
+    const rounds = D.stop?.rounds || 0;
+    entries = ps.map((p) => {
+      let err = 0;
+      for (let r = 1; r <= rounds; r++) {
+        const t = R.stop?.[`r${r}`]?.[p.pid];
+        err += t == null ? STOP_MISS : Math.abs(t - STOP_TARGETS[r - 1] * 1000);
+      }
+      return { pid: p.pid, v: err };
+    });
+    better = (a, b) => a.v - b.v;
+    label = (v) => `오차 합계 ${fmtSec(v)}초`;
   } else if (g === "react") {
     entries = ps.map((p) => {
       let sum = 0;
@@ -290,7 +310,8 @@ setInterval(() => {
   if (done.has(k)) return;
   if (s.phase === "play" && t > s.endAt + 1200) {
     done.add(k);
-    if (s.game === "tap" || s.game === "mole") finishGame(s.game);
+    if (s.game === "tap" || s.game === "mole" || s.game === "shake") finishGame(s.game);
+    else if (s.game === "stop") setState({ ...s, phase: "reveal" });
     else if (s.game === "react") {
       if (s.round < REACT_ROUNDS) setState({ phase: "wait", game: "react", round: s.round, nextAt: t + 5000 });
       else finishGame("react");
@@ -347,6 +368,8 @@ function introView(s) {
         <textarea id="qs">${esc(D.minority?.text || DEFAULT_QUESTIONS)}</textarea></div>` : ""}
       ${s.game === "rps" ? `<p class="muted" style="font-size:22px">4명 이상일 땐 비겨도 생존, 3명 이하부터는 이긴 사람만 생존</p>` : ""}
       ${s.game === "mole" ? moleLegend(150, 26) : ""}
+      ${s.game === "stop" ? `<p class="h-sub" style="font-size:26px">목표 시간: ${STOP_TARGETS.map((t) => `${t}초`).join(" → ")}</p>` : ""}
+      ${s.game === "shake" ? `<p style="font-size:120px;line-height:1">📳🏇</p><p class="h-sub" style="font-size:24px">아이폰은 폰 화면의 <b class="gold">‘흔들기 준비’</b> 버튼을 먼저 눌러 센서를 허용해 주세요</p>` : ""}
       ${s.game === "tteok" ? `<div style="width:240px;height:240px">${dungiArt(TTEOK_ART.dungi, "happy")}</div>` : ""}
     </div>`;
   setControls("모두의 폰에 규칙이 표시되고 있어요", [
@@ -386,6 +409,76 @@ function moleView(s) {
       const max = Math.max(5, ...ps.map((p) => p.v));
       $("#rows").innerHTML = ps.map((p, i) => `<div class="row"><span class="rk">${i + 1}</span><span class="nm">${esc(p.name)}</span>
         <div class="track"><i style="width:${(Math.max(0, p.v) / max) * 100}%;background:${teamColor(p.pid)}"></i></div><span class="val">${p.v}점</span></div>`).join("");
+      this.tick();
+    }
+  };
+}
+
+// ---------- 화면: 정지! 타이머 ----------
+function stopPlayView(s) {
+  stage.innerHTML = `<div class="center">
+      <p class="serif gold" style="font-size:32px">ROUND ${s.round} / ${STOP_TARGETS.length}</p>
+      <p class="h-title" style="font-size:72px">목표 <span class="gold">${s.target}.00</span>초</p>
+      <p class="clock stop-clock" id="clk" style="font-size:180px"></p>
+      <p class="h-sub" id="sub" style="font-size:30px"></p>
+      <p class="h-sub" id="cnt"></p></div>`;
+  setControls("숫자는 3초 뒤에 사라져요. 마음속으로 세고 폰의 STOP!", [{ label: "중단하고 로비로", cls: "ghost", on: () => setState({ phase: "lobby" }) }]);
+  const loop = () => {
+    const el = document.querySelector("#clk");
+    if (!el || keyOf(D.state) !== keyOf(s)) return;
+    const t = now(), ms = t - s.startAt;
+    if (ms < 0) { el.textContent = String(Math.ceil(-ms / 1000)); $("#sub").textContent = "곧 시작!"; }
+    else if (ms < STOP_SHOW_MS) { el.textContent = fmtSec(ms); $("#sub").textContent = "잘 보세요… 곧 사라져요"; }
+    else if (t < s.endAt) { el.textContent = "??.??"; $("#sub").textContent = "지금부터는 감으로! 목표 시간에 STOP"; }
+    else { el.textContent = "끝!"; $("#sub").textContent = ""; }
+    const n = Object.keys(D.results?.stop?.[`r${s.round}`] || {}).length;
+    $("#cnt").textContent = `멈춘 사람 ${n} / ${plist().length}`;
+    requestAnimationFrame(loop);
+  };
+  loop();
+  return {};
+}
+
+function stopRevealView(s) {
+  const res = D.results?.stop?.[`r${s.round}`] || {};
+  const goal = s.target * 1000;
+  const rows = plist().map((p) => {
+    const t = res[p.pid];
+    return { ...p, t, err: t == null ? Infinity : t - goal };
+  }).sort((a, b) => Math.abs(a.err) - Math.abs(b.err));
+  const last = s.round >= STOP_TARGETS.length;
+  const best = rows[0] && rows[0].t != null ? rows[0] : null;
+  stage.innerHTML = `<p class="serif gold" style="font-size:28px;text-align:center">ROUND ${s.round} 결과 · 목표 ${s.target}.00초</p>
+    <p class="h-title" style="text-align:center;margin:6px 0 18px">${best ? `가장 가까운 사람: ${esc(best.name)} (${fmtSec(best.t)}초)` : "아무도 멈추지 않았어요"}</p>
+    <div class="rows">${rows.map((p, i) => `<div class="row"><span class="rk">${i + 1}</span><span class="nm">${esc(p.name)}</span>
+      <span class="muted">${p.t == null ? "못 멈춤" : `${fmtSec(p.t)}초에 STOP`}</span>
+      <span class="val" style="color:${p.t == null ? "var(--bad)" : Math.abs(p.err) < 300 ? "var(--good)" : "var(--text)"}">${p.t == null ? "-" : (p.err >= 0 ? "+" : "−") + fmtSec(Math.abs(p.err))}</span></div>`).join("")}</div>`;
+  const btns = [];
+  if (!last) btns.push({ label: "여기서 끝내기", cls: "ghost", on: () => finishGame("stop") });
+  btns.push(last ? { label: "결과 보기", on: () => finishGame("stop") } : { label: `다음 라운드 · 목표 ${STOP_TARGETS[s.round]}초`, on: () => startStopRound(s.round + 1) });
+  setControls("오차가 작을수록 좋아요 · 못 누르면 오차 5초", btns);
+  return {};
+}
+
+// ---------- 화면: 폰 흔들기 레이스 ----------
+function shakeView(s) {
+  stage.innerHTML = `<div style="display:flex;justify-content:space-between;align-items:flex-end;margin-bottom:16px">
+      <p class="h-title">폰 흔들기 레이스</p><p class="clock" id="clk"></p></div>
+    <div class="lanes" id="lanes"></div>`;
+  setControls("폰을 꼭 쥐고 힘차게 흔드세요! (손목 스트랩·주변 조심)", [{ label: "중단하고 로비로", cls: "ghost", on: () => setState({ phase: "lobby" }) }]);
+  return {
+    tick() { $("#clk").textContent = clockText(s); },
+    update() {
+      const ps = plist();
+      const v = (pid) => D.results?.shake?.[pid] ?? D.live?.shake?.[pid] ?? 0;
+      const max = Math.max(40, ...ps.map((p) => v(p.pid)));
+      const lead = Math.max(0, ...ps.map((p) => v(p.pid)));
+      $("#lanes").innerHTML = ps.map((p) => {
+        const pct = Math.min(100, (v(p.pid) / max) * 100);
+        return `<div class="lane"><span class="nm">${esc(p.name)}</span>
+          <div class="lane-track"><i style="width:${pct}%"></i><span class="horse${v(p.pid) === lead && lead > 0 ? " lead" : ""}" style="left:${pct}%">🏇</span><span class="flag">🏁</span></div>
+          <span class="val">${v(p.pid)}</span></div>`;
+      }).join("");
       this.tick();
     }
   };
@@ -567,7 +660,7 @@ function resultView(s) {
 }
 
 // ---------- 화면: 종합 결과 ----------
-const GAME_COLORS = { tap: "#D9B872", mole: "#B98A5E", react: "#8B5CC9", minority: "#5FB3A1", rps: "#6E9BE0", tteok: "#E07FA8" };
+const GAME_COLORS = { tap: "#D9B872", mole: "#B98A5E", react: "#8B5CC9", minority: "#5FB3A1", rps: "#6E9BE0", tteok: "#E07FA8", stop: "#E8955A", shake: "#9FD36B" };
 function finalView() {
   const list = D.final || [];
   const champ = list.filter((e) => e.rank === 1).map((e) => e.name).join(", ");

@@ -11,9 +11,9 @@
   #wrap { height: 100vh; display: grid; grid-template-rows: auto 1fr auto; grid-template-columns: minmax(0, 1fr) 300px; }
   #wrap > header, #wrap > footer { grid-column: 1 / -1; }
   #wrap > main { grid-column: 1; grid-row: 2; min-height: 0; }
-  #glist { grid-column: 2; grid-row: 2;min-height: 0; overflow: auto; border-left: 1px solid var(--line); background: rgba(42, 26, 61, .55); padding: 20px 16px; display: flex; flex-direction: column; gap: 8px; }
+  #glist { grid-column: 2; grid-row: 2;min-height: 0; overflow: auto; border-left: 1px solid var(--line); background: rgba(42, 26, 61, .55); padding: 16px 14px; display: flex; flex-direction: column; gap: 4px; }
   #glist .gl-head { font-size: 14px; letter-spacing: .2em; color: var(--gold); margin: 0 6px 6px; }
-  #glist .gl-item { display: grid; grid-template-columns: 34px 1fr auto; align-items: center; gap: 10px; width: 100%; text-align: left; padding: 12px 12px; border-radius: 12px; background: transparent; border: 1.5px solid transparent; color: var(--text); font-size: 19px; font-weight: 700; }
+  #glist .gl-item { display: grid; grid-template-columns: 34px 1fr auto; align-items: center; gap: 10px; width: 100%; text-align: left; padding: 9px 12px; border-radius: 12px; background: transparent; border: 1.5px solid transparent; color: var(--text); font-size: 18px; font-weight: 700; }
   #glist .gl-item:hover { background: var(--panel-2); }
   #glist .gl-no { font-family: "Cormorant Garamond", serif; font-size: 24px; color: var(--gold); text-align: center; }
   #glist .gl-tag { font-size: 13px; font-weight: 700; padding: 3px 8px; border-radius: 999px; white-space: nowrap; }
@@ -37,6 +37,16 @@
   .bar-legend { display: flex; flex-wrap: wrap; gap: 8px 16px; margin-top: 14px; font-size: 15px; color: var(--muted); }
   .bar-legend span { display: inline-flex; align-items: center; gap: 6px; }
   .bar-legend i { width: 14px; height: 14px; border-radius: 4px; display: inline-block; }
+  .stop-clock { font-family: "Noto Sans KR", monospace; letter-spacing: .02em; color: var(--gold); }
+  .lanes { display: flex; flex-direction: column; gap: 10px; }
+  .lane { display: grid; grid-template-columns: 160px 1fr 70px; align-items: center; gap: 14px; font-size: 22px; }
+  .lane .nm { font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .lane .val { text-align: right; font-weight: 900; font-variant-numeric: tabular-nums; }
+  .lane-track { position: relative; height: 46px; border-radius: 10px; background: repeating-linear-gradient(90deg, var(--panel) 0 38px, var(--panel-2) 38px 40px); border-bottom: 2px solid var(--line); }
+  .lane-track > i { position: absolute; left: 0; top: 0; bottom: 0; background: linear-gradient(90deg, rgba(159,211,107,0), rgba(159,211,107,.28)); border-radius: 10px; transition: width .3s; }
+  .lane-track .horse { position: absolute; top: 50%; transform: translate(-85%, -55%) scaleX(-1); font-size: 38px; transition: left .3s; }
+  .lane-track .horse.lead { filter: drop-shadow(0 0 8px var(--gold)); }
+  .lane-track .flag { position: absolute; right: 6px; top: 50%; transform: translateY(-50%); font-size: 26px; opacity: .7; }
   .podium.medal .pod .blk { font-size: 44px; }
   .podium.medal .pod:nth-child(2) .blk { background: linear-gradient(180deg, rgba(217,184,114,.55), rgba(217,184,114,.15)); color: #1C1029; }
   .podium.medal .pod:nth-child(1) .blk { background: linear-gradient(180deg, rgba(199,199,214,.45), rgba(199,199,214,.1)); }
